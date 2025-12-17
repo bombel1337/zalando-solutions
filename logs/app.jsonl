@@ -1,0 +1,7 @@
+{"timestamp":"2025-12-17 11-56-26-348","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-17 11-56-46-391","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-17 11-56-54-505","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-17 11-57-09-200","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-17 11-57-19-686","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}
+{"timestamp":"2025-12-17 12-00-00-048","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-17 12-00-12-987","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}

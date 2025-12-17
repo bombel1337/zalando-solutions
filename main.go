@@ -20,7 +20,7 @@ const (
 	firstNamesFile = "lastnames.txt"
 	tasksFileName = "tasks.csv"
 
-	debugIP = "" // http://127.0.0.1:8000
+	debugIP = "http://127.0.0.1:53797" // http://127.0.0.1:8000
 )
 
 func main() {

@@ -7,7 +7,6 @@ import (
 	"zalando-solutions/akamai"
 
 	"github.com/Hyper-Solutions/hyper-sdk-go/v2"
-	"github.com/bogdanfinn/fhttp/cookiejar"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
 )
@@ -71,7 +70,8 @@ type sbsd struct {
 }
 
 func createTLSClient() (tls_client.HttpClient, error) {
-	jar, _ := cookiejar.New(nil)
+	// jar, _ := cookiejar.New(nil)
+	jar := tls_client.NewCookieJar()
 
 	options := []tls_client.HttpClientOption{
 		tls_client.WithTimeoutSeconds(30),
