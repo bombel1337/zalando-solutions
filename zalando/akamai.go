@@ -340,6 +340,9 @@ func (t *task) generateValidAkamaiSensor() error {
 	context := ""
 	sensorData := ""
 	for i := range 3 {
+		// Human-like delay before fetching cookies (simulates JS execution time)
+		utils.HumanDelay(150, 400)
+		
 		_abck, err := getCookieValue(t.Client, t.Akamai.Domain, "_abck")
 		if err != nil {
 			return fmt.Errorf("could not find _abck cookie: %s", err.Error())
@@ -368,11 +371,18 @@ func (t *task) generateValidAkamaiSensor() error {
 		if err != nil {
 			return fmt.Errorf("error generating sensordata: %s", err.Error())
 		}
+		
+		// Delay before posting sensor (simulates browser JS processing)
+		utils.HumanDelay(200, 600)
+		
 		err = t.postAkamaiSensor(&sensorData)
 		if err != nil {
 			return fmt.Errorf("error posting sensordata: %s", err.Error())
 		}
 		fmt.Println("here")
+
+		// Delay to let server process and update cookies
+		utils.HumanDelay(300, 700)
 
 		_abck, err = getCookieValue(t.Client, "https://accounts.zalando.com", "_abck")
 		if err != nil {
@@ -380,6 +390,8 @@ func (t *task) generateValidAkamaiSensor() error {
 		}
 		if akamai.IsCookieValid(_abck, i) {
 			fmt.Println("valid")
+			// Extra delay after cookie validation before making authenticated requests
+			utils.HumanDelay(500, 1200)
 			return nil
 		}
 
@@ -389,6 +401,9 @@ func (t *task) generateValidAkamaiSensor() error {
 
 func (t *task) generateValidAkamaiSbsd() error {
 	for i := range 2 {
+		// Human-like delay before SBSD generation
+		utils.HumanDelay(200, 500)
+		
 		bm_so, err := getCookieValue(t.Client, "https://accounts.zalando.com", "bm_so")
 		if err != nil {
 			return fmt.Errorf("could not find bm_so cookie: %s", err.Error())
@@ -408,11 +423,20 @@ func (t *task) generateValidAkamaiSbsd() error {
 		if err != nil {
 			return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 		}
+		
+		// Delay before posting SBSD payload
+		utils.HumanDelay(150, 400)
+		
 		err = t.postSbsdPayload(&payload)
 		if err != nil {
 			return fmt.Errorf("error posting sbsd payload: %s", err.Error())
 		}
 		fmt.Println("payload posted")
+		
+		// Delay after posting to simulate browser behavior
+		utils.HumanDelay(300, 700)
 	}
+	// Final delay before making authenticated requests
+	utils.HumanDelay(400, 900)
 	return nil
 }

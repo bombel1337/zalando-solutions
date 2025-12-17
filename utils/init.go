@@ -77,7 +77,8 @@ func createTLSClient() (tls_client.HttpClient, error) {
 		tls_client.WithTimeoutSeconds(30),
 		tls_client.WithClientProfile(profiles.Chrome_133),
 		tls_client.WithCookieJar(jar),
-		tls_client.WithRandomTLSExtensionOrder(),
+		// REMOVED: WithRandomTLSExtensionOrder() - causes fingerprint inconsistency
+		// Real browsers have deterministic TLS extension ordering
 	}
 
 	client, err := tls_client.NewHttpClient(tls_client.NewLogger(), options...)

@@ -4,8 +4,10 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"strings"
+	"time"
 )
 
 
@@ -68,4 +70,15 @@ func readTasksCSV(filename string) ([]Data, error) {
 	}
 
 	return tasks, nil
+}
+
+// HumanDelay introduces a human-like random delay between min and max milliseconds
+// This helps avoid Akamai velocity-based detection
+func HumanDelay(minMs, maxMs int) {
+	if minMs >= maxMs {
+		time.Sleep(time.Duration(minMs) * time.Millisecond)
+		return
+	}
+	delay := minMs + rand.IntN(maxMs-minMs)
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 }

@@ -104,7 +104,16 @@ func (t *task) usernameLookup() (Result, error) {
 			return Result{Msg: "bad response"}, fmt.Errorf(response.Next)
 		}
 	} else if resp.StatusCode == 403 {
-		return Result{Msg: "akamai ban",}, HTTPError{Code: 500, Msg: resp.Status}
+		// Enhanced error logging for Akamai 403 debugging
+		_abck, _ := getCookieValue(t.Client, t.Akamai.Domain, "_abck")
+		bm_sz, _ := getCookieValue(t.Client, t.Akamai.Domain, "bm_sz")
+		utils.LogError(t.TaskNumber, "usernameLookup", 
+			fmt.Sprintf("Akamai 403 | _abck=%s | bm_sz=%s | body=%s", 
+				_abck[:min(50, len(_abck))], 
+				bm_sz[:min(30, len(bm_sz))], 
+				string(bodyText[:min(200, len(bodyText))])),
+			fmt.Errorf("akamai ban detected"))
+		return Result{Msg: "akamai ban"}, HTTPError{Code: 403, Msg: resp.Status}
 	}
 
 	return Result{
