@@ -3,6 +3,7 @@ package akamai
 import (
 	"context"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,6 +16,15 @@ var (
 
 	sensorScriptPathExpr = regexp.MustCompile(`<script type="text/javascript"\s+(?:nonce=".*")?\s+src="((?i)[a-z\d/\-_]+)"></script>`)
 	sbsdScriptPathExpr   = regexp.MustCompile(`(?is)\bsrc\s*=\s*["']([^"'\?]+)\?[^"']*?\bv=([^"'&]+)`)
+
+	rePixelBazaExpr  = regexp.MustCompile(`bazadebezolkohpepadr\s*=\s*"([^"]+)"`)
+	reScriptPathExpr = regexp.MustCompile(`(?is)<script[^>]*\bsrc\s*=\s*"([^"]*/akam/[^"]+)"[^>]*>`)
+
+	pixelScriptVarExpr         = regexp.MustCompile(`g=_\[(\d+)]`)
+	pixelScriptStringArrayExpr = regexp.MustCompile(`var _=\[(.+)];`)
+	pixelScriptStringsExpr     = regexp.MustCompile(`("[^",]*")`)
+
+
 )
 
 func CreateAkamaiSession(apiKey string) *hyper.Session {
@@ -32,7 +42,60 @@ func ParseScriptPathSensor(src []byte) (string, error) {
 
 	return blockLink, nil
 }
+func ParsePixelScriptVar(reader io.Reader) (string, error) {
+	src, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
 
+	index := pixelScriptVarExpr.FindSubmatch(src)
+	if len(index) < 2 {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+	stringIndex, err := strconv.Atoi(string(index[1]))
+	if err != nil {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+
+	arrayDeclaration := pixelScriptStringArrayExpr.FindSubmatch(src)
+	if len(arrayDeclaration) < 2 {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+
+	rawStrings := pixelScriptStringsExpr.FindAllSubmatch(arrayDeclaration[1], -1)
+	if stringIndex >= len(rawStrings) {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+
+	if len(rawStrings[stringIndex]) < 2 {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+
+	if v, err := strconv.Unquote(string(rawStrings[stringIndex][1])); err == nil {
+		return v, nil
+	} else {
+		return "", fmt.Errorf("script var not found: %s", err)
+	}
+}
+
+func ParsePixel(src []byte) (string, string, error) {
+	matches := reScriptPathExpr.FindSubmatch(src)
+	if len(matches) < 2 {
+		return "", "", fmt.Errorf("script src not found")
+	}
+
+	link := string(matches[1])
+	for _, v := range matches {
+		fmt.Println(string(v))
+	}
+	matches = rePixelBazaExpr.FindSubmatch(src)
+	if len(matches) < 2 {
+		return "", "", fmt.Errorf("bazadebezolkohpepadr not found")
+	}
+	baza := string(matches[1])
+
+	return baza, link, nil
+}
 func ParseScriptPathSbsd(src []byte) (path string, v string, err error) {
 
 	m := sbsdScriptPathExpr.FindSubmatch(src)
@@ -50,15 +113,21 @@ func GenerateSensorData(session *hyper.Session, input *hyper.SensorInput) (strin
 	if err != nil {
 		return "", "", err
 	}
-	return sensorData, sensorContext, nil
+	return sensorData, sensorContext, err
 }
-
+func GeneratePixel(session *hyper.Session, input *hyper.PixelInput) (string, error) {
+	payload, err := session.GeneratePixelData(context.Background(), input)
+	if err != nil {
+		return "", err
+	}
+	return payload, err
+}
 func GenerateSbsdPayload(session *hyper.Session, input *hyper.SbsdInput) (string, error) {
 	payload, err := session.GenerateSbsdData(context.Background(), input)
 	if err != nil {
 		return "", err
 	}
-	return payload, nil
+	return payload, err
 }
 
 func IsCookieValid(cookie string, requestCount int) bool {

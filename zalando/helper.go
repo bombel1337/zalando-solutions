@@ -101,3 +101,27 @@ func parseRawQuery(raw string) map[string]string {
 	}
 	return out
 }
+
+func addPixelPrefix(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+
+	p := u.Path
+	trailingSlash := strings.HasSuffix(p, "/")
+	p = strings.TrimSuffix(p, "/")
+
+	i := strings.LastIndex(p, "/")
+	if i < 0 || i == len(p)-1 {
+		return "", fmt.Errorf("invalid path: %q", u.Path)
+	}
+
+	last := p[i+1:]
+	u.Path = p[:i+1] + "pixel_" + last
+	if trailingSlash {
+		u.Path += "/"
+	}
+
+	return u.String(), nil
+}

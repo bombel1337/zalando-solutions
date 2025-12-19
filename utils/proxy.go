@@ -36,6 +36,10 @@ func (t *Task) ChangeTaskProxy() error {
 		return t.Client.SetProxy(t.DebugIP)
 	}
 
+	if len(t.ProxyList) == 0 {
+		return nil
+	}
+
 	rotatedRandomProxy, err := rotateRandomProxy(t.ProxyList) // []string
 	if err != nil {
 		return err

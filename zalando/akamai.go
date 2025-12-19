@@ -2,6 +2,7 @@ package zalando
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -105,7 +106,7 @@ func (t *task) visitSensorScriptAkamai() (Result, error) {
 		return Result{Msg: "read body failed"}, err
 	}
 	if resp.StatusCode == 200 {
-		t.Akamai.Sensor.SensorScript = string(bodyText)
+		t.Akamai.Sensor.SensorScriptString = string(bodyText)
 		return Result{
 			Status: resp.StatusCode,
 			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
@@ -170,7 +171,7 @@ func (t *task) visitSbsdScriptAkamai() (Result, error) {
 		return Result{Msg: "read body failed"}, err
 	}
 	if resp.StatusCode == 200 {
-		t.Akamai.Sbsd.SbsdScript = string(bodyText)
+		t.Akamai.Sbsd.SbsdScriptString = string(bodyText)
 		return Result{
 			Status: resp.StatusCode,
 			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
@@ -182,7 +183,76 @@ func (t *task) visitSbsdScriptAkamai() (Result, error) {
 		Msg:    fmt.Sprintf("VisiSbsdScript request failed (%s)", resp.Status),
 	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
 }
+func (t *task) visitPixelScriptAkamai() (Result, error) {
+	req, err := http.NewRequest(http.MethodGet, t.Akamai.Pixel.PixelScriptUrl, nil)
+	if err != nil {
+		return Result{Msg: "build request failed"}, err
+	}
 
+	req.Header = http.Header{
+		"sec-ch-ua-platform": {`"Windows"`},
+		"dpr":                {"1"},
+		"viewport-width":     {"1920"},
+		"user-agent":         {utils.UserAgent},
+		"sec-ch-ua":          {utils.SecChUa},
+		"sec-ch-ua-mobile":   {"?0"},
+		"accept":             {"*/*"},
+		"sec-fetch-site":     {"same-origin"},
+		"sec-fetch-mode":     {"no-cors"},
+		"sec-fetch-dest":     {"script"},
+		"referer":            {t.Akamai.Referer},
+		"accept-encoding":    {"gzip, deflate, br, zstd"},
+		"accept-language":    {utils.AcceptLanguage},
+		"if-none-match":      {fmt.Sprintf("%x", sha256.Sum256([]byte("etag")))},
+		"if-modified-since":  {`Thu, 22 Feb 2024 19:37:35 GMT`},
+		http.HeaderOrderKey: {
+			"sec-ch-ua-platform",
+			"dpr",
+			"viewport-width",
+			"user-agent",
+			"sec-ch-ua",
+			"sec-ch-ua-mobile",
+			"accept",
+			"sec-fetch-site",
+			"sec-fetch-mode",
+			"sec-fetch-dest",
+			"referer",
+			"accept-encoding",
+			"accept-language",
+			"cookie",
+			"if-none-match",
+			"if-modified-since",
+		},
+		http.PHeaderOrderKey: {
+			":method",
+			":authority",
+			":scheme",
+			":path",
+		},
+	}
+	resp, err := t.Client.Do(req)
+	if err != nil {
+		return Result{Msg: "request failed"}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		t.Akamai.Pixel.U, err = akamai.ParsePixelScriptVar(resp.Body)
+		if err != nil {
+			return Result{Msg: "read body failed"}, err
+		}
+
+		return Result{
+			Status: resp.StatusCode,
+			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
+		}, nil
+	}
+
+	return Result{
+		Status: resp.StatusCode,
+		Msg:    fmt.Sprintf("visitPixelScript request failed (%s)", resp.Status),
+	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
+}
 func (t *task) postAkamaiSensor(sensorData *string) error {
 	b, _ := json.Marshal(map[string]string{"sensor_data": *sensorData})
 	body := bytes.NewReader(b)
@@ -322,6 +392,76 @@ func (t *task) postSbsdPayload(payload *string) error {
 
 	return fmt.Errorf("request failed: %s", resp.Status)
 }
+
+func (t *task) postPixelPayload(payload *string) error {
+	body := strings.NewReader(*payload)
+	url, err := addPixelPrefix(t.Akamai.Pixel.PixelScriptUrl)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, body)
+	if err != nil {
+		return err
+	}
+
+	req.Header = http.Header{
+		"sec-ch-ua-platform": {`"Windows"`},
+		"dpr":                {"1"},
+		"viewport-width":     {"1920"},
+		"user-agent":         {utils.UserAgent},
+		"sec-ch-ua":          {utils.SecChUa},
+		"content-type":       {"application/x-www-form-urlencoded"},
+		"sec-ch-ua-mobile":   {"?0"},
+		"accept":             {"*/*"},
+		"origin":             {t.Akamai.Domain},
+		"sec-fetch-site":     {"same-origin"},
+		"sec-fetch-mode":     {"cors"},
+		"sec-fetch-dest":     {"empty"},
+		"referer":            {t.Akamai.Referer},
+		"accept-encoding":    {"gzip, deflate, br, zstd"},
+		"accept-language":    {utils.AcceptLanguage},
+		"priority":           {"u=1, i"},
+		http.HeaderOrderKey: {
+			"content-length",
+			"sec-ch-ua-platform",
+			"dpr",
+			"viewport-width",
+			"user-agent",
+			"sec-ch-ua",
+			"content-type",
+			"sec-ch-ua-mobile",
+			"accept",
+			"origin",
+			"sec-fetch-site",
+			"sec-fetch-mode",
+			"sec-fetch-dest",
+			"referer",
+			"accept-encoding",
+			"accept-language",
+			"cookie",
+			"priority",
+		},
+		http.PHeaderOrderKey: {
+			":method",
+			":authority",
+			":scheme",
+			":path",
+		},
+	}
+
+	resp, err := t.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		return nil
+	}
+
+	return fmt.Errorf("request failed: %s", resp.Status)
+}
+
 func getCookieValue(client tls_client.HttpClient, rawUrl string, key string) (string, error) {
 	parsedURL, err := url.Parse(rawUrl)
 	if err != nil {
@@ -359,7 +499,7 @@ func (t *task) generateValidAkamaiSensor() error {
 			IP:             t.Akamai.IPAddress,
 		}
 		if i == 0 {
-			input.Script = t.Akamai.Sensor.SensorScript
+			input.Script = t.Akamai.Sensor.SensorScriptString
 		} else {
 			input.Context = context
 		}
@@ -409,7 +549,7 @@ func (t *task) generateValidAkamaiSbsd() error {
 			Uuid:           t.Akamai.Sbsd.SbsdV,
 			PageUrl:        t.Akamai.Sensor.PageUrl,
 			OCookie:        bm_so,
-			Script:         t.Akamai.Sbsd.SbsdScript,
+			Script:         t.Akamai.Sbsd.SbsdScriptString,
 			AcceptLanguage: utils.AcceptLanguage,
 			IP:             t.Akamai.IPAddress,
 		}
@@ -434,5 +574,31 @@ func (t *task) generateValidAkamaiSbsd() error {
 			return fmt.Errorf("error posting sbsd payload: %s", err.Error())
 		}
 	}
+	return nil
+}
+
+func (t *task) generateValidAkamaiPixel() error {
+
+	input := hyper.PixelInput{
+		UserAgent:      utils.UserAgent,
+		HTMLVar:        t.Akamai.Pixel.Bazadebezolkohpepadr,
+		ScriptVar:      t.Akamai.Pixel.U,
+		AcceptLanguage: utils.AcceptLanguage,
+		IP:             t.Akamai.IPAddress,
+	}
+	payload, err := akamai.GeneratePixel(t.Akamai.AkamaiClient, &input)
+	if err != nil {
+		return fmt.Errorf("error generating sbsd payload: %s", err.Error())
+	}
+	fmt.Println("pixel ==================")
+
+	fmt.Println(payload)
+	fmt.Println("pixel ==================")
+
+	err = t.postPixelPayload(&payload)
+	if err != nil {
+		return fmt.Errorf("error posting pixel payload: %s", err.Error())
+	}
+
 	return nil
 }

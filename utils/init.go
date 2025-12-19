@@ -54,22 +54,30 @@ type Akamai struct {
 	IPAddress    string
 	Sensor       sensor
 	Sbsd         sbsd
+	Pixel        pixel
 	Domain       string
 	Referer      string
 }
 type sensor struct {
-	PageUrl         string
-	SensorPath      string
-	SensorScript    string
-	SensorScriptUrl string
-	SensorData      string
+	PageUrl            string
+	SensorPath         string
+	SensorScriptString string
+	SensorScriptUrl    string
+	SensorData         string
+}
+type pixel struct {
+	PageUrl              string
+	PixelScriptUrl       string
+	PixelScriptString    string
+	Bazadebezolkohpepadr string
+	U                    string
 }
 type sbsd struct {
-	PageUrl       string
-	SbsdScriptUrl string
-	SbsdScript    string
-	SbsdPath      string
-	SbsdV         string
+	PageUrl          string
+	SbsdScriptUrl    string
+	SbsdScriptString string
+	SbsdPath         string
+	SbsdV            string
 }
 
 func createTLSClient() (tls_client.HttpClient, error) {

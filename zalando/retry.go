@@ -18,7 +18,7 @@ func (e HTTPError) Error() string {
 
 func retryable(code int) bool {
 	switch code {
-	case 403, 429, 500, 502, 503, 504:
+	case 429, 500, 502, 503, 504:
 		return true
 	default:
 		return false

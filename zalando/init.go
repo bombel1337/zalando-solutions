@@ -203,7 +203,14 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 				Msg:    fmt.Sprintf("cant get sbsdpath for parsescript (%s)", err),
 			}, err
 		}
-
+		t.Akamai.Pixel.Bazadebezolkohpepadr, t.Akamai.Pixel.PixelScriptUrl, err = akamai.ParsePixel(body)
+		if err != nil {
+			return Result{
+				Status: 400,
+				Msg:    fmt.Sprintf("cant get bazade for pixel ParsePixel (%s)", err),
+			}, err
+		}
+		fmt.Println(t.Akamai.Pixel.Bazadebezolkohpepadr, t.Akamai.Pixel.PixelScriptUrl)
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Finished redirects (%s)", resp.Status),
@@ -353,6 +360,7 @@ func (t *task) firstRequest() (Result, error) {
 	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
 }
 
+
 func ZalandoInit(t *utils.Task) {
 	z := NewClient(t)
 	// parsedURL, err := url.Parse("https://www.zalando.pl/")
@@ -430,11 +438,11 @@ func ZalandoInit(t *utils.Task) {
 		return
 	}
 
-	res, err = z.retryLogic("consents", z.consents)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "consents", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
-		return
-	}
+	// res, err = z.retryLogic("consents", z.consents)
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "consents", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+	// 	return
+	// }
 
 	z.Akamai.Sensor.SensorScriptUrl = fmt.Sprintf("https://accounts.zalando.com%s", z.Akamai.Sensor.SensorPath)
 	res, err = z.retryLogic("visitSensorScriptAkamai", z.visitSensorScriptAkamai)
@@ -450,13 +458,24 @@ func ZalandoInit(t *utils.Task) {
 		return
 	}
 
+	// res, err = z.retryLogic("visitPixelScriptAkamai", z.visitPixelScriptAkamai)
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "visitPixelScriptAkamai", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
+	// 	return
+	// }
+
 	z.Akamai.Domain = "https://accounts.zalando.com"
 	err = z.generateValidAkamaiSensor()
 	if err != nil {
 		utils.LogError(z.TaskNumber, "generateValidAkamaiSensor", fmt.Sprintf("msg=%q", err), err)
 		return
 	}
-	// err = z.generateValidAkamaiSbsd()
+	err = z.generateValidAkamaiSbsd()
+	if err != nil {
+		utils.LogError(z.TaskNumber, "generateValidAkamaiSbsd", fmt.Sprintf("msg=%q", err), err)
+		return
+	}
+	// err = z.generateValidAkamaiPixel()
 	// if err != nil {
 	// 	utils.LogError(z.TaskNumber, "generateValidAkamaiSbsd", fmt.Sprintf("msg=%q", err), err)
 	// 	return
@@ -480,11 +499,11 @@ func ZalandoInit(t *utils.Task) {
 	u.RawQuery = q.Encode()
 	z.Akamai.Referer = u.String()
 
-	res, err = z.retryLogic("checkCredentials", z.checkCredentials)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "checkCredentials", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
-		return
-	}
+	// res, err = z.retryLogic("checkCredentials", z.checkCredentials)
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "checkCredentials", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
+	// 	return
+	// }
 
 	// res, err = z.retryLogic("register", z.register)
 	// if err != nil {

@@ -61,6 +61,8 @@ func main() {
 		zalando.ZalandoInit(&task)
 	}
 
+	time.Sleep(9999 * time.Hour)
+
 	utils.LogInfo(0, "main", "Successfully prepared app")
 
 }
