@@ -50,6 +50,7 @@ func buildAuthenticateURLOrdered(rawAuthURL string) (string, error) {
 		"ui_locales",
 		"zalando_client_id",
 		"tc",
+		"appearance",
 		"sales_channel",
 		"client_country",
 		"client_category",

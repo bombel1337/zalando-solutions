@@ -27,7 +27,7 @@ type Result struct {
 	Location string
 }
 
-func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
+func (t *task) followUpMyAccountFirst(redirect *string, secFetchSite *string) (Result, error) {
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", *redirect), nil)
 	if err != nil {
@@ -41,10 +41,11 @@ func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
 		"sec-ch-ua":                 {utils.SecChUa},
 		"sec-ch-ua-mobile":          {"?0"},
 		"sec-ch-ua-platform":        {`"Windows"`},
-		"sec-fetch-site":            {"none"},
+		"sec-fetch-site":            {*secFetchSite},
 		"sec-fetch-mode":            {"navigate"},
 		"sec-fetch-user":            {"?1"},
 		"sec-fetch-dest":            {"document"},
+		"referer":                   {fmt.Sprintf("https://www.zalando.%s/", t.CountryISOCode)},
 		"accept-encoding":           {"gzip, deflate, br, zstd"},
 		"accept-language":           {utils.AcceptLanguage},
 		"priority":                  {"u=0, i"},
@@ -59,6 +60,7 @@ func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
 			"sec-fetch-mode",
 			"sec-fetch-user",
 			"sec-fetch-dest",
+			"referer",
 			"accept-encoding",
 			"accept-language",
 			"cookie",
@@ -80,6 +82,7 @@ func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
 	loc := resp.Header.Get("Location")
 
 	if resp.StatusCode == 307 && resp.Request.URL.Path == "/login" {
+		*secFetchSite = "cross-site"
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Found redirect (%s)", resp.Status),
@@ -89,12 +92,6 @@ func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Found redirect (%s)", resp.Status),
-			Location: loc,
-		}, nil
-	} else if resp.StatusCode == 200 && resp.Request.URL.Path == "/authenticate" {
-		return Result{
-			Status:   resp.StatusCode,
-			Msg:      fmt.Sprintf("Finished redirects (%s)", resp.Status),
 			Location: loc,
 		}, nil
 	}
@@ -117,13 +114,14 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 		"upgrade-insecure-requests": {"1"},
 		"user-agent":                {utils.UserAgent},
 		"accept":                    {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"},
-		"sec-fetch-site":            {"none"},
+		"sec-fetch-site":            {"cross-site"},
 		"sec-fetch-mode":            {"navigate"},
 		"sec-fetch-user":            {"?1"},
 		"sec-fetch-dest":            {"document"},
 		"sec-ch-ua":                 {utils.SecChUa},
 		"sec-ch-ua-mobile":          {"?0"},
 		"sec-ch-ua-platform":        {`"Windows"`},
+		"referer":                   {fmt.Sprintf("https://www.zalando.%s/", t.CountryISOCode)},
 		"accept-encoding":           {"gzip, deflate, br, zstd"},
 		"accept-language":           {utils.AcceptLanguage},
 		"priority":                  {"u=0, i"},
@@ -138,6 +136,7 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 			"sec-ch-ua",
 			"sec-ch-ua-mobile",
 			"sec-ch-ua-platform",
+			"referer",
 			"accept-encoding",
 			"accept-language",
 			"cookie",
@@ -158,13 +157,7 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 	defer resp.Body.Close()
 	loc := resp.Header.Get("Location")
 
-	if resp.StatusCode == 307 && resp.Request.URL.Path == "/login" {
-		return Result{
-			Status:   resp.StatusCode,
-			Msg:      fmt.Sprintf("Found redirect (%s)", resp.Status),
-			Location: loc,
-		}, nil
-	} else if resp.StatusCode == 302 {
+	if resp.StatusCode == 302 {
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Found redirect (%s)", resp.Status),
@@ -182,6 +175,8 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 			return Result{Msg: "auth url not found"}, fmt.Errorf("referer not found")
 		}
 		raw = strings.ReplaceAll(raw, `\u0026`, `&`)
+		fmt.Println(resp.Request.URL.String())
+		fmt.Println(raw)
 		authURL, err := buildAuthenticateURLOrdered(raw)
 		if err != nil {
 			return Result{Msg: "auth url normalize failed"}, err
@@ -274,11 +269,36 @@ func (t *task) init() (Result, error) {
 		return Result{Msg: "request failed"}, err
 	}
 	defer resp.Body.Close()
-	// body, err := io.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return Result{Msg: "failed to read body"}, err
-	// }
+
 	if resp.StatusCode == 200 {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return Result{Msg: "failed to read body"}, err
+		}
+		t.Akamai.Referer = resp.Request.URL.String()
+		t.Akamai.Sensor.PageUrl = resp.Request.URL.String()
+		t.Akamai.Sbsd.PageUrl = resp.Request.URL.String()
+		t.Akamai.Sensor.SensorPath, err = akamai.ParseScriptPathSensor(body)
+		if err != nil {
+			return Result{
+				Status: 400,
+				Msg:    fmt.Sprintf("cant get sensorpath for parsescript (%s)", err),
+			}, err
+		}
+		t.Akamai.Sbsd.SbsdPath, t.Akamai.Sbsd.SbsdV, err = akamai.ParseScriptPathSbsd(body)
+		if err != nil {
+			return Result{
+				Status: 400,
+				Msg:    fmt.Sprintf("cant get sbsdpath for parsescript (%s)", err),
+			}, err
+		}
+		t.Akamai.Pixel.Bazadebezolkohpepadr, t.Akamai.Pixel.PixelScriptUrl, err = akamai.ParsePixel(body)
+		if err != nil {
+			return Result{
+				Status: 400,
+				Msg:    fmt.Sprintf("cant get bazade for pixel ParsePixel (%s)", err),
+			}, err
+		}
 		return Result{
 			Status: resp.StatusCode,
 			Msg:    fmt.Sprintf("Found redirect (%s)", resp.Status),
@@ -293,7 +313,7 @@ func (t *task) init() (Result, error) {
 func (t *task) firstRequest() (Result, error) {
 	domain := fmt.Sprintf("https://www.zalando.%s", strings.ToLower(t.CountryISOCode))
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/myaccount/orders/", domain), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/myaccount/", domain), nil)
 	if err != nil {
 		return Result{Msg: "build request failed"}, err
 	}
@@ -305,10 +325,11 @@ func (t *task) firstRequest() (Result, error) {
 		"upgrade-insecure-requests": {"1"},
 		"user-agent":                {utils.UserAgent},
 		"accept":                    {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"},
-		"sec-fetch-site":            {"none"},
+		"sec-fetch-site":            {"same-origin"},
 		"sec-fetch-mode":            {"navigate"},
 		"sec-fetch-user":            {"?1"},
 		"sec-fetch-dest":            {"document"},
+		"referer":                   {fmt.Sprintf(`https://www.zalando.%s/`, t.CountryISOCode)},
 		"accept-encoding":           {"gzip, deflate, br, zstd"},
 		"accept-language":           {utils.AcceptLanguage},
 		"priority":                  {"u=0, i"},
@@ -323,6 +344,7 @@ func (t *task) firstRequest() (Result, error) {
 			"sec-fetch-mode",
 			"sec-fetch-user",
 			"sec-fetch-dest",
+			"referer",
 			"accept-encoding",
 			"accept-language",
 			"cookie",
@@ -360,7 +382,6 @@ func (t *task) firstRequest() (Result, error) {
 	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
 }
 
-
 func ZalandoInit(t *utils.Task) {
 	z := NewClient(t)
 	// parsedURL, err := url.Parse("https://www.zalando.pl/")
@@ -391,6 +412,20 @@ func ZalandoInit(t *utils.Task) {
 		return
 	}
 	time.Sleep(t.Delay)
+	z.Akamai.Sensor.SensorScriptUrl = fmt.Sprintf("https://www.zalando.%s%s", z.CountryISOCode, z.Akamai.Sbsd.SbsdPath)
+	res, err = z.retryLogic("visitSensorScriptAkamai", z.visitSensorScriptAkamai)
+	if err != nil {
+		utils.LogError(z.TaskNumber, "visitSensorScriptAkamai", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
+		return
+	}
+
+	z.Akamai.Sbsd.SbsdScriptUrl = fmt.Sprintf("https://www.zalando.%s%s", z.CountryISOCode, z.Akamai.Sbsd.SbsdPath)
+	res, err = z.retryLogic("visitSbsdScriptAkamai", z.visitSbsdScriptAkamai)
+	if err != nil {
+		utils.LogError(z.TaskNumber, "visitSbsdScriptAkamai", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
+		return
+	}
+	time.Sleep(t.Delay)
 
 	res, err = z.retryLogic("firstRequest", z.firstRequest)
 	if err != nil {
@@ -398,19 +433,19 @@ func ZalandoInit(t *utils.Task) {
 		return
 	}
 
+	secFetchSite := "same-origin"
 	redirect := fmt.Sprintf("https://www.zalando.%s%s", strings.ToLower(t.CountryISOCode), res.Location)
 	res, err = z.retryLogic("followUpMyAccountFirst", func() (Result, error) {
-		res, e := z.followUpMyAccountFirst(&redirect)
+		res, e := z.followUpMyAccountFirst(&redirect, &secFetchSite)
 		return res, e
 	})
 	if err != nil {
 		utils.LogError(z.TaskNumber, "followUpMyAccountFirst", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
 		return
 	}
-
 	redirect = res.Location
 	res, err = z.retryLogic("followUpMyAccountFirst", func() (Result, error) {
-		res, e := z.followUpMyAccountFirst(&redirect)
+		res, e := z.followUpMyAccountFirst(&redirect, &secFetchSite)
 		return res, e
 	})
 	if err != nil {
@@ -419,30 +454,22 @@ func ZalandoInit(t *utils.Task) {
 	}
 
 	redirect = fmt.Sprintf("https://accounts.zalando.com%s", res.Location)
-	res, err = z.retryLogic("followUpMyAccountSecond", func() (Result, error) {
+	res, err = z.retryLogic("followUpMyAccountThird", func() (Result, error) {
 		res, e := z.followUpMyAccountSecond(&redirect)
 		return res, e
 	})
-	if err != nil {
-		utils.LogError(z.TaskNumber, "followUpMyAccountSecond", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
-		return
-	}
 
 	redirect = fmt.Sprintf("https://accounts.zalando.com%s", res.Location)
-	res, err = z.retryLogic("followUpMyAccountSecond", func() (Result, error) {
+	res, err = z.retryLogic("followUpMyAccountThird", func() (Result, error) {
 		res, e := z.followUpMyAccountSecond(&redirect)
 		return res, e
 	})
+
+	res, err = z.retryLogic("consents", z.consents)
 	if err != nil {
-		utils.LogError(z.TaskNumber, "followUpMyAccountSecond", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+		utils.LogError(z.TaskNumber, "consents", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
 		return
 	}
-
-	// res, err = z.retryLogic("consents", z.consents)
-	// if err != nil {
-	// 	utils.LogError(z.TaskNumber, "consents", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
-	// 	return
-	// }
 
 	z.Akamai.Sensor.SensorScriptUrl = fmt.Sprintf("https://accounts.zalando.com%s", z.Akamai.Sensor.SensorPath)
 	res, err = z.retryLogic("visitSensorScriptAkamai", z.visitSensorScriptAkamai)

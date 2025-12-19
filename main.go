@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 	for _, task := range *tasks {
-		zalando.ZalandoInit(&task)
+		go zalando.ZalandoInit(&task)
 	}
 
 	time.Sleep(9999 * time.Hour)

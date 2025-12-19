@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"strings"
 	"zalando-solutions/utils"
 
@@ -20,7 +19,7 @@ func (t *task) usernameLookup() (Result, error) {
 	}
 
 	req.Header = http.Header{
-		"ot-tracer-spanid":   {fmt.Sprintf("%016x", rand.Uint64())},
+		"ot-tracer-spanid":   {`a09c5aca4b43e763`}, //{fmt.Sprintf("%016x", rand.Uint64())},
 		"sec-ch-ua-platform": {`"Windows"`},
 		"x-csrf-token":       {t.Data.CsrfToken},
 		"x-xsrf-token":       {""},
@@ -28,7 +27,7 @@ func (t *task) usernameLookup() (Result, error) {
 		"sec-ch-ua":          {utils.SecChUa},
 		"sec-ch-ua-mobile":   {"?0"},
 		"ot-tracer-sampled":  {"true"},
-		"ot-tracer-traceid":  {fmt.Sprintf("%016x", rand.Uint64())},
+		"ot-tracer-traceid":  {`93e9e4915087b384`}, //{fmt.Sprintf("%016x", rand.Uint64())},
 		"dpr":                {"1"},
 		"user-agent":         {utils.UserAgent},
 		"content-type":       {"application/json"},
