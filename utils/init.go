@@ -3,6 +3,9 @@ package utils
 import (
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/bogdanfinn/fhttp/cookiejar"
 
 	"zalando-solutions/akamai"
 
@@ -26,8 +29,8 @@ type Task struct {
 	Client         tls_client.HttpClient
 	Data           Data
 	DebugIP        string
-	Delay          int
-	ErrorDelay     int
+	Delay          time.Duration
+	ErrorDelay     time.Duration
 	MaxRetries     int
 	Akamai         Akamai
 	ProxyList      []string
@@ -40,8 +43,8 @@ type ClientConfig struct {
 	ProxyFile      string
 	FirstNamesFile string
 	LastNamesFile  string
-	Delay          int
-	ErrorDelay     int
+	Delay          time.Duration
+	ErrorDelay     time.Duration
 	DebugIP        string
 	MaxRetries     int
 	AkamaiApiKey   string
@@ -70,21 +73,21 @@ type sbsd struct {
 }
 
 func createTLSClient() (tls_client.HttpClient, error) {
-	// jar, _ := cookiejar.New(nil)
-	jar := tls_client.NewCookieJar()
+	jar, _ := cookiejar.New(nil)
+	// jar := tls_client.NewCookieJar()
 
 	options := []tls_client.HttpClientOption{
 		tls_client.WithTimeoutSeconds(30),
 		tls_client.WithClientProfile(profiles.Chrome_133),
 		tls_client.WithCookieJar(jar),
 		tls_client.WithRandomTLSExtensionOrder(),
+		tls_client.WithNotFollowRedirects(),
 	}
 
 	client, err := tls_client.NewHttpClient(tls_client.NewLogger(), options...)
 	if err != nil {
 		return client, err
 	}
-	client.SetFollowRedirect(false)
 	return client, nil
 }
 func ClientInit(cfg ClientConfig) (*[]Task, error) {

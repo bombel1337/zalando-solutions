@@ -71,7 +71,6 @@ func IsCookieValid(cookie string, requestCount int) bool {
 	if err != nil {
 		requestThreshold = -1
 	}
-	fmt.Println("IsCookieValid requestThreshold", requestThreshold)
 
 	return requestThreshold != -1 && requestCount >= requestThreshold
 }
@@ -86,7 +85,6 @@ func IsCookieInvalidated(cookie string) bool {
 	if err != nil {
 		signal = -1
 	}
-	fmt.Println("IsCookieInvalidated signal", signal)
 
 	return signal > -1
 }

@@ -61,7 +61,7 @@ func (t *task) retryLogic(name string, fn func() (Result, error)) (Result, error
 		}
 
 		if i < max {
-			time.Sleep(time.Duration(t.ErrorDelay) * time.Second)
+			time.Sleep(t.ErrorDelay)
 		}
 	}
 

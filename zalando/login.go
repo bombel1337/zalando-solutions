@@ -104,10 +104,10 @@ func (t *task) usernameLookup() (Result, error) {
 			return Result{Msg: "bad response"}, fmt.Errorf(response.Next)
 		}
 	} else if resp.StatusCode == 403 {
-		return Result{Msg: "akamai ban",}, HTTPError{Code: 500, Msg: resp.Status}
+		return Result{Msg: "akamai ban"}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
 	}
 
 	return Result{
-		Msg:    fmt.Sprintf("Fetch failed (%s)", string(bodyText)),
+		Msg: fmt.Sprintf("Fetch failed (%s)", string(bodyText)),
 	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
 }

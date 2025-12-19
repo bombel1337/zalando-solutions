@@ -350,7 +350,7 @@ func (t *task) generateValidAkamaiSensor() error {
 		}
 		input := hyper.SensorInput{
 			ScriptUrl:      t.Akamai.Sensor.SensorScriptUrl,
-			PageUrl:        fmt.Sprintf("%s/", t.Akamai.Sensor.PageUrl),
+			PageUrl:        fmt.Sprintf("%s", t.Akamai.Sensor.PageUrl),
 			UserAgent:      utils.UserAgent,
 			Abck:           _abck,
 			Bmsz:           bm_sz,
@@ -358,28 +358,37 @@ func (t *task) generateValidAkamaiSensor() error {
 			AcceptLanguage: utils.AcceptLanguage,
 			IP:             t.Akamai.IPAddress,
 		}
-		fmt.Println(input.PageUrl)
 		if i == 0 {
 			input.Script = t.Akamai.Sensor.SensorScript
 		} else {
 			input.Context = context
 		}
+		// fmt.Println("input sensor======")
+		// b, err := json.Marshal(input)
+		// if err != nil {
+		// 	return fmt.Errorf("error generating sbsd payload: %s", err.Error())
+		// } else {
+		// 	fmt.Printf("input sensor=%s]n", b)
+		// }
 		sensorData, context, err = akamai.GenerateSensorData(t.Akamai.AkamaiClient, &input)
 		if err != nil {
 			return fmt.Errorf("error generating sensordata: %s", err.Error())
 		}
+		// fmt.Println("sensor ==================")
+		// fmt.Println(sensorData, context)
+		// fmt.Println("sensor ==================")
+
 		err = t.postAkamaiSensor(&sensorData)
 		if err != nil {
 			return fmt.Errorf("error posting sensordata: %s", err.Error())
 		}
-		fmt.Println("here")
 
 		_abck, err = getCookieValue(t.Client, "https://accounts.zalando.com", "_abck")
 		if err != nil {
 			return fmt.Errorf("could not find _abck cookie: %s", err.Error())
 		}
 		if akamai.IsCookieValid(_abck, i) {
-			fmt.Println("valid")
+			fmt.Println("abck valid on step", i)
 			return nil
 		}
 
@@ -404,15 +413,26 @@ func (t *task) generateValidAkamaiSbsd() error {
 			AcceptLanguage: utils.AcceptLanguage,
 			IP:             t.Akamai.IPAddress,
 		}
+		// fmt.Println("input sbsd======")
+		// b, err := json.Marshal(input)
+		// if err != nil {
+		// 	return fmt.Errorf("error generating sbsd payload: %s", err.Error())
+		// } else {
+		// 	fmt.Printf("input sbsd=%s]n", b)
+		// }
 		payload, err := akamai.GenerateSbsdPayload(t.Akamai.AkamaiClient, &input)
 		if err != nil {
 			return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 		}
+		// fmt.Println("sbsd ==================")
+
+		// fmt.Println(payload)
+		// fmt.Println("sbsd ==================")
+
 		err = t.postSbsdPayload(&payload)
 		if err != nil {
 			return fmt.Errorf("error posting sbsd payload: %s", err.Error())
 		}
-		fmt.Println("payload posted")
 	}
 	return nil
 }

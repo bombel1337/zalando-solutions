@@ -5,3 +5,64 @@
 {"timestamp":"2025-12-17 11-57-19-686","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}
 {"timestamp":"2025-12-17 12-00-00-048","level":"INFO","name":"main","message":"Starting application"}
 {"timestamp":"2025-12-17 12-00-12-987","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}
+{"timestamp":"2025-12-18 09-30-11-094","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-18 09-30-22-170","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}
+{"timestamp":"2025-12-18 09-30-27-339","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 2/3 failed status=500 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 10-30-44-018","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-30-44-051","level":"INFO","name":"main","message":"Successfully prepared app"}
+{"timestamp":"2025-12-19 10-30-58-801","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-31-09-101","level":"INFO","task_number":1,"name":"ZalandoInit","message":"Successfully prepared zalandoinit"}
+{"timestamp":"2025-12-19 10-34-50-729","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-35-06-445","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=500 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 10-35-19-457","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-35-28-420","level":"ERROR","task_number":1,"name":"generateValidAkamaiSbsd","message":"msg=\"error posting sbsd payload: request failed: 200 OK\"","error":{"message":"error posting sbsd payload: request failed: 200 OK"}}
+{"timestamp":"2025-12-19 10-53-28-644","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-53-36-722","level":"ERROR","task_number":1,"name":"generateValidAkamaiSbsd","message":"msg=\"error posting sbsd payload: request failed: 200 OK\"","error":{"message":"error posting sbsd payload: request failed: 200 OK"}}
+{"timestamp":"2025-12-19 10-56-17-383","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-56-45-052","level":"INFO","task_number":1,"name":"ZalandoInit","message":"Successfully prepared zalandoinit"}
+{"timestamp":"2025-12-19 10-57-01-929","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-57-20-017","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 10-57-31-391","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-57-46-917","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 10-58-04-527","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-58-16-623","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-58-26-799","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-58-43-606","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 10-58-46-928","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 10-59-01-938","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-04-43-489","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-04-49-966","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-06-31-050","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-06-45-115","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-12-13-067","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-12-40-246","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-14-53-144","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-20-38-152","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-24-05-459","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-24-17-882","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-25-57-800","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-26-27-950","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-29-13-123","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-29-27-536","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-34-20-758","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-36-03-123","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-36-07-084","level":"ERROR","task_number":1,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-36-31-474","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-36-34-999","level":"ERROR","task_number":1,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-36-38-100","level":"ERROR","task_number":2,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-36-41-342","level":"ERROR","task_number":3,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-37-03-884","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-37-07-436","level":"ERROR","task_number":1,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-37-10-667","level":"ERROR","task_number":2,"name":"generateValidAkamaiSensor","message":"msg=\"error posting sensordata: bad body on post sensor\"","error":{"message":"error posting sensordata: bad body on post sensor"}}
+{"timestamp":"2025-12-19 11-38-18-198","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-38-34-553","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-39-02-130","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-39-17-234","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-40-27-385","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-40-41-638","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-40-46-866","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 2/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-40-52-079","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 3/3 failed status=403 msg=\"akamai ban\""}
+{"timestamp":"2025-12-19 11-40-52-079","level":"ERROR","task_number":1,"name":"usernameLookup","message":"exhausted retries last_msg=\"akamai ban\"","error":{"message":"http 403"}}
+{"timestamp":"2025-12-19 11-40-52-080","level":"ERROR","task_number":1,"name":"usernameLookup","message":"final status=0 msg=\"akamai ban\", location=","error":{"message":"usernameLookup failed after 3 retries: http 403"}}
+{"timestamp":"2025-12-19 11-41-51-642","level":"INFO","name":"main","message":"Starting application"}
+{"timestamp":"2025-12-19 11-41-57-136","level":"WARNING","task_number":1,"name":"usernameLookup","message":"attempt 1/3 failed status=403 msg=\"akamai ban\""}

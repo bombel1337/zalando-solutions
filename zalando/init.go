@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"zalando-solutions/akamai"
 	"zalando-solutions/utils"
 
@@ -91,38 +92,6 @@ func (t *task) followUpMyAccountFirst(redirect *string) (Result, error) {
 			Location: loc,
 		}, nil
 	} else if resp.StatusCode == 200 && resp.Request.URL.Path == "/authenticate" {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return Result{Msg: "failed to read body"}, err
-		}
-
-		re := regexp.MustCompile(`https://accounts\.zalando\.com/authenticate\?[^"' <>\n]+`)
-		raw := re.FindString(string(body))
-		if raw == "" {
-			return Result{Msg: "auth url not found"}, fmt.Errorf("referer not found")
-		}
-		raw = strings.ReplaceAll(raw, `\u0026`, `&`)
-		authURL, err := buildAuthenticateURLOrdered(raw)
-		if err != nil {
-			return Result{Msg: "auth url normalize failed"}, err
-		}
-		t.Akamai.Referer = authURL
-		t.Akamai.Sensor.PageUrl = resp.Request.URL.String()
-		t.Akamai.Sbsd.PageUrl = resp.Request.URL.String()
-		t.Akamai.Sensor.SensorPath, err = akamai.ParseScriptPathSensor(body)
-		if err != nil {
-			return Result{
-				Status: 400,
-				Msg:    fmt.Sprintf("cant get sensorpath for parsescript (%s)", err),
-			}, err
-		}
-		t.Akamai.Sbsd.SbsdPath, t.Akamai.Sbsd.SbsdV, err = akamai.ParseScriptPathSbsd(body)
-		if err != nil {
-			return Result{
-				Status: 400,
-				Msg:    fmt.Sprintf("cant get sbsdpath for parsescript (%s)", err),
-			}, err
-		}
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Finished redirects (%s)", resp.Status),
@@ -234,6 +203,7 @@ func (t *task) followUpMyAccountSecond(redirect *string) (Result, error) {
 				Msg:    fmt.Sprintf("cant get sbsdpath for parsescript (%s)", err),
 			}, err
 		}
+
 		return Result{
 			Status:   resp.StatusCode,
 			Msg:      fmt.Sprintf("Finished redirects (%s)", resp.Status),
@@ -297,28 +267,11 @@ func (t *task) init() (Result, error) {
 		return Result{Msg: "request failed"}, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Result{Msg: "failed to read body"}, err
-	}
+	// body, err := io.ReadAll(resp.Body)
+	// if err != nil {
+	// 	return Result{Msg: "failed to read body"}, err
+	// }
 	if resp.StatusCode == 200 {
-		t.Akamai.Referer = resp.Request.URL.String()
-		t.Akamai.Sensor.PageUrl = resp.Request.URL.String()
-		t.Akamai.Sbsd.PageUrl = resp.Request.URL.String()
-		t.Akamai.Sensor.SensorPath, err = akamai.ParseScriptPathSensor(body)
-		if err != nil {
-			return Result{
-				Status: 400,
-				Msg:    fmt.Sprintf("cant get sensorpath for parsescript (%s)", err),
-			}, err
-		}
-		t.Akamai.Sbsd.SbsdPath, t.Akamai.Sbsd.SbsdV, err = akamai.ParseScriptPathSbsd(body)
-		if err != nil {
-			return Result{
-				Status: 400,
-				Msg:    fmt.Sprintf("cant get sbsdpath for parsescript (%s)", err),
-			}, err
-		}
 		return Result{
 			Status: resp.StatusCode,
 			Msg:    fmt.Sprintf("Found redirect (%s)", resp.Status),
@@ -402,21 +355,23 @@ func (t *task) firstRequest() (Result, error) {
 
 func ZalandoInit(t *utils.Task) {
 	z := NewClient(t)
-	parsedURL, err := url.Parse("https://www.zalando.pl/")
-	if err != nil {
-		return
-	}
-	fmt.Println("===============")
-	for _, cookie := range z.Client.GetCookies(parsedURL) {
-		fmt.Println(cookie)
-	}
-	fmt.Println("===============")
+	// parsedURL, err := url.Parse("https://www.zalando.pl/")
+	// if err != nil {
+	// 	return
+	// }
+	// fmt.Println("===============")
+	// for _, cookie := range z.Client.GetCookies(parsedURL) {
+	// 	fmt.Println(cookie)
+	// }
+	// fmt.Println("===============")
 
-	err = z.ChangeTaskProxy()
+	err := z.ChangeTaskProxy()
 	if err != nil {
 		utils.LogError(z.TaskNumber, "ChangeTaskProxy", "cant change proxy", err)
 		return
 	}
+	fmt.Println(t.Client.GetProxy())
+
 	res, err := z.retryLogic("getPublicIP", z.getPublicIP)
 	if err != nil {
 		utils.LogError(z.TaskNumber, "getPublicIP", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
@@ -427,32 +382,7 @@ func ZalandoInit(t *utils.Task) {
 		utils.LogError(z.TaskNumber, "init", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
 		return
 	}
-
-	z.Akamai.Sensor.SensorScriptUrl = fmt.Sprintf("https://www.zalando.%s%s", z.CountryISOCode, z.Akamai.Sensor.SensorPath)
-	res, err = z.retryLogic("visitSensorScriptAkamai", z.visitSensorScriptAkamai)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "visitSensorScriptAkamai", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
-		return
-	}
-
-	z.Akamai.Sbsd.SbsdScriptUrl = fmt.Sprintf("https://www.zalando.%s%s", z.CountryISOCode, z.Akamai.Sbsd.SbsdPath)
-	res, err = z.retryLogic("visitSbsdScriptAkamai", z.visitSbsdScriptAkamai)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "visitSbsdScriptAkamai", fmt.Sprintf("final status=%d msg=%q, location=%s", res.Status, res.Msg, res.Location), err)
-		return
-	}
-
-	// z.Akamai.Domain = fmt.Sprintf("https://www.zalando.%s", z.CountryISOCode)
-	// err = z.generateValidAkamaiSensor()
-	// if err != nil {
-	// 	utils.LogError(z.TaskNumber, "generateValidAkamaiSensor", fmt.Sprintf("msg=%q", err), err)
-	// 	return
-	// }
-	// err = z.generateValidAkamaiSbsd()
-	// if err != nil {
-	// 	utils.LogError(z.TaskNumber, "generateValidAkamaiSbsd", fmt.Sprintf("msg=%q", err), err)
-	// 	return
-	// }
+	time.Sleep(t.Delay)
 
 	res, err = z.retryLogic("firstRequest", z.firstRequest)
 	if err != nil {
@@ -526,16 +456,17 @@ func ZalandoInit(t *utils.Task) {
 		utils.LogError(z.TaskNumber, "generateValidAkamaiSensor", fmt.Sprintf("msg=%q", err), err)
 		return
 	}
-	err = z.generateValidAkamaiSbsd()
-	if err != nil {
-		utils.LogError(z.TaskNumber, "generateValidAkamaiSbsd", fmt.Sprintf("msg=%q", err), err)
-		return
-	}
+	// err = z.generateValidAkamaiSbsd()
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "generateValidAkamaiSbsd", fmt.Sprintf("msg=%q", err), err)
+	// 	return
+	// }
 	z.Data.CsrfToken, err = getCookieValue(t.Client, "https://accounts.zalando.com", "csrf-token")
 	if err != nil {
 		utils.LogError(z.TaskNumber, "getCookieValue", fmt.Sprintf("msg=%q", err), err)
 		return
 	}
+	time.Sleep(t.Delay)
 
 	res, err = z.retryLogic("usernameLookup", z.usernameLookup)
 	if err != nil {
@@ -555,16 +486,16 @@ func ZalandoInit(t *utils.Task) {
 		return
 	}
 
-	res, err = z.retryLogic("register", z.register)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "register", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
-		return
-	}
-	redirect, err = buildSSOPostReg(z.Akamai.Referer)
-	if err != nil {
-		utils.LogError(z.TaskNumber, "buildSSOPostReg", "cant create redirect", err)
-		return
-	}
-	fmt.Println(redirect)
+	// res, err = z.retryLogic("register", z.register)
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "register", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+	// 	return
+	// }
+	// redirect, err = buildSSOPostReg(z.Akamai.Referer)
+	// if err != nil {
+	// 	utils.LogError(z.TaskNumber, "buildSSOPostReg", "cant create redirect", err)
+	// 	return
+	// }
+	// fmt.Println(redirect)
 	utils.LogInfo(z.TaskNumber, "ZalandoInit", "Successfully prepared zalandoinit")
 }

@@ -3,24 +3,26 @@ package main
 import (
 	"fmt"
 	"os"
-	
+	"time"
+
 	"zalando-solutions/utils"
 	"zalando-solutions/zalando"
+
 	"github.com/joho/godotenv"
 )
 
 const (
 	logsDir = "logs"
 
-	delay         = 1
-	errorDelay    = 5
-	maxRetries    = 3
-	proxyFileName = "proxies.txt"
-	lastNamesFile = "firstnames.txt"
+	delay          = 1 * time.Second
+	errorDelay     = 5 * time.Second
+	maxRetries     = 3
+	proxyFileName  = "proxies.txt"
+	lastNamesFile  = "firstnames.txt"
 	firstNamesFile = "lastnames.txt"
-	tasksFileName = "tasks.csv"
+	tasksFileName  = "tasks.csv"
 
-	debugIP = "http://127.0.0.1:53797" // http://127.0.0.1:8000
+	debugIP = "" // http://127.0.0.1:8000
 )
 
 func main() {
