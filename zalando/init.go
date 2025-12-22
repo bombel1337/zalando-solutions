@@ -512,7 +512,17 @@ func ZalandoInit(t *utils.Task) {
 		utils.LogError(z.TaskNumber, "getCookieValue", fmt.Sprintf("msg=%q", err), err)
 		return
 	}
-	time.Sleep(t.Delay)
+	
+	// Regenerate Akamai sensor data right before usernameLookup to prevent 403
+	utils.LogInfo(z.TaskNumber, "ZalandoInit", "Regenerating Akamai sensor before usernameLookup")
+	err = z.generateValidAkamaiSensor()
+	if err != nil {
+		utils.LogError(z.TaskNumber, "generateValidAkamaiSensor", fmt.Sprintf("msg=%q", err), err)
+		return
+	}
+	
+	// Small delay to mimic human behavior
+	time.Sleep(500 * time.Millisecond)
 
 	res, err = z.retryLogic("usernameLookup", z.usernameLookup)
 	if err != nil {
