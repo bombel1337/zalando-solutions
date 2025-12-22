@@ -24,8 +24,8 @@ func retryable(code int) bool {
 		return false
 	}
 }
-func (t *task) retryLogic(name string, fn func() (Result, error)) (Result, error) {
-	max := t.MaxRetries
+func (z *zalaTask) retryLogic(name string, fn func() (Result, error)) (Result, error) {
+	max := z.MaxRetries
 	if max <= 0 {
 		max = 1
 	}
@@ -44,27 +44,27 @@ func (t *task) retryLogic(name string, fn func() (Result, error)) (Result, error
 
 		he, ok := err.(HTTPError)
 		if !ok {
-			utils.LogError(t.TaskNumber, name, fmt.Sprintf(`attempt %d/%d unexpected msg=%q`, i, max, res.Msg), err)
+			utils.LogError(z.TaskNumber, name, fmt.Sprintf(`attempt %d/%d unexpected msg=%q`, i, max, res.Msg), err)
 			return res, err
 		}
 
 		if !retryable(he.Code) {
-			utils.LogError(t.TaskNumber, name,
+			utils.LogError(z.TaskNumber, name,
 				fmt.Sprintf(`non-retryable status=%d msg=%q`, he.Code, res.Msg),
 				err,
 			)
 			return res, fmt.Errorf("%s failed (non-retryable): %w", name, err)
 		} else {
-			utils.LogWarning(t.TaskNumber, name,
+			utils.LogWarning(z.TaskNumber, name,
 				fmt.Sprintf(`attempt %d/%d failed status=%d msg=%q`, i, max, he.Code, res.Msg),
 			)
 		}
 
 		if i < max {
-			time.Sleep(t.ErrorDelay)
+			time.Sleep(z.ErrorDelay)
 		}
 	}
 
-	utils.LogError(t.TaskNumber, name, fmt.Sprintf(`exhausted retries last_msg=%q`, lastRes.Msg), lastErr)
+	utils.LogError(z.TaskNumber, name, fmt.Sprintf(`exhausted retries last_msg=%q`, lastRes.Msg), lastErr)
 	return lastRes, fmt.Errorf("%s failed after %d retries: %w", name, max, lastErr)
 }

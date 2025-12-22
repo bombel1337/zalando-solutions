@@ -1,17 +1,17 @@
 package utils
 
 import (
-	"fmt"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/bogdanfinn/fhttp/cookiejar"
+	"github.com/enetx/g"
 
 	"zalando-solutions/akamai"
 
+	"github.com/enetx/surf"
+
 	"github.com/Hyper-Solutions/hyper-sdk-go/v2"
-	tls_client "github.com/bogdanfinn/tls-client"
-	"github.com/bogdanfinn/tls-client/profiles"
 )
 
 type Data struct {
@@ -23,10 +23,11 @@ type Data struct {
 	InteriaPassword string `csv:"Interia_Password"`
 	CsrfToken       string
 }
+
 type Task struct {
 	CountryISOCode string
 	TaskNumber     int
-	Client         tls_client.HttpClient
+	Client         *surf.Client
 	Data           Data
 	DebugIP        string
 	Delay          time.Duration
@@ -36,6 +37,9 @@ type Task struct {
 	ProxyList      []string
 	FirstNames     []string
 	LastNames      []string
+
+	proxyMu      sync.RWMutex
+	currentProxy string
 }
 
 type ClientConfig struct {
@@ -49,6 +53,7 @@ type ClientConfig struct {
 	MaxRetries     int
 	AkamaiApiKey   string
 }
+
 type Akamai struct {
 	AkamaiClient *hyper.Session
 	IPAddress    string
@@ -58,6 +63,7 @@ type Akamai struct {
 	Domain       string
 	Referer      string
 }
+
 type sensor struct {
 	PageUrl            string
 	SensorPath         string
@@ -65,6 +71,7 @@ type sensor struct {
 	SensorScriptUrl    string
 	SensorData         string
 }
+
 type pixel struct {
 	PageUrl              string
 	PixelScriptUrl       string
@@ -72,6 +79,7 @@ type pixel struct {
 	Bazadebezolkohpepadr string
 	U                    string
 }
+
 type sbsd struct {
 	PageUrl          string
 	SbsdScriptUrl    string
@@ -80,25 +88,23 @@ type sbsd struct {
 	SbsdV            string
 }
 
-func createTLSClient() (tls_client.HttpClient, error) {
-	jar, _ := cookiejar.New(nil)
-	// jar := tls_client.NewCookieJar()
-
-	options := []tls_client.HttpClientOption{
-		tls_client.WithTimeoutSeconds(30),
-		tls_client.WithClientProfile(profiles.Chrome_133),
-		tls_client.WithCookieJar(jar),
-		tls_client.WithRandomTLSExtensionOrder(),
-		tls_client.WithNotFollowRedirects(),
-	}
-
-	client, err := tls_client.NewHttpClient(tls_client.NewLogger(), options...)
-	if err != nil {
-		return client, err
-	}
-	return client, nil
+func (t *Task) initSurfClientWithDynamicProxy() {
+	t.Client = surf.NewClient().
+		Builder().
+		Session().
+		Singleton().
+		Impersonate().Chrome().
+		NotFollowRedirects().
+		Proxy(func() g.String {
+			t.proxyMu.RLock()
+			p := t.currentProxy
+			t.proxyMu.RUnlock()
+			return g.String(p)
+		}).
+		Build()
 }
-func ClientInit(cfg ClientConfig) (*[]Task, error) {
+
+func ClientInit(cfg ClientConfig) (*[]*Task, error) {
 	if _, err := os.Stat(cfg.TasksFile); err != nil {
 		return nil, err
 	}
@@ -129,18 +135,12 @@ func ClientInit(cfg ClientConfig) (*[]Task, error) {
 		return nil, err
 	}
 
-	tasks := make([]Task, 0, len(records))
+	tasks := make([]*Task, 0, len(records))
 
 	for i, v := range records {
-		client, err := createTLSClient()
-		if err != nil {
-			ColorfulLog(ColorRed, fmt.Sprintf("ClientInit - createTLSClient error - %s", err.Error()))
-			return nil, err
-		}
-		task := Task{
+		task := &Task{
 			CountryISOCode: "pl",
 			TaskNumber:     i + 1,
-			Client:         client,
 			DebugIP:        cfg.DebugIP,
 			ProxyList:      proxyList,
 			Data:           v,
@@ -150,7 +150,10 @@ func ClientInit(cfg ClientConfig) (*[]Task, error) {
 			FirstNames:     firstnames,
 			LastNames:      lastnames,
 		}
+
+		task.initSurfClientWithDynamicProxy()
 		task.Akamai.AkamaiClient = akamai.CreateAkamaiSession(cfg.AkamaiApiKey)
+
 		tasks = append(tasks, task)
 	}
 

@@ -6,60 +6,91 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 )
 
+func init() {
+	// Ensures rotation is actually random across runs.
+	rand.Seed(time.Now().UnixNano())
+}
+
 func loadProxies(filename string) ([]string, error) {
-	file, err := os.Open(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer f.Close()
 
 	var proxies []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		proxy := scanner.Text()
-		if proxy != "" {
-			proxies = append(proxies, proxy)
-		}
-	}
+	sc := bufio.NewScanner(f)
 
-	if err := scanner.Err(); err != nil {
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		proxies = append(proxies, line)
+	}
+	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-
 	return proxies, nil
 }
 
 func (t *Task) ChangeTaskProxy() error {
-	if t.DebugIP != "" {
-		return t.Client.SetProxy(t.DebugIP)
-	}
-
-	if len(t.ProxyList) == 0 {
+	if strings.TrimSpace(t.DebugIP) != "" {
+		t.setCurrentProxy(t.DebugIP)
 		return nil
 	}
 
-	rotatedRandomProxy, err := rotateRandomProxy(t.ProxyList) // []string
+	if len(t.ProxyList) == 0 {
+		t.setCurrentProxy("")
+		return nil
+	}
+
+	raw, err := getRandomProxy(t.ProxyList)
 	if err != nil {
 		return err
 	}
-	return t.Client.SetProxy(rotatedRandomProxy)
+
+	proxyURL, err := normalizeProxyToURL(raw)
+	if err != nil {
+		return err
+	}
+
+	t.setCurrentProxy(proxyURL)
+	return nil
+}
+func (t *Task) CurrentProxy() string {
+	t.proxyMu.RLock()
+	defer t.proxyMu.RUnlock()
+	return t.currentProxy
+}
+func (t *Task) setCurrentProxy(proxyURL string) {
+	t.proxyMu.Lock()
+	t.currentProxy = proxyURL
+	t.proxyMu.Unlock()
 }
 
-func rotateRandomProxy(proxies []string) (string, error) {
-	p, err := getRandomProxy(proxies)
-	if err != nil {
-		return "", err
+func normalizeProxyToURL(p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "", fmt.Errorf("empty proxy")
 	}
 
-	// Expect: host:port:user:pass
+	if strings.Contains(p, "://") {
+		return p, nil
+	}
+
 	parts := strings.Split(p, ":")
 	if len(parts) != 4 {
-		return "", fmt.Errorf("invalid proxy format (expected host:port:user:pass): %q", p)
+		return "", fmt.Errorf("invalid proxy format (expected host:port:user:pass or URL): %q", p)
+	}
+	host, port, user, pass := parts[0], parts[1], parts[2], parts[3]
+	if host == "" || port == "" || user == "" || pass == "" {
+		return "", fmt.Errorf("invalid proxy parts (empty field): %q", p)
 	}
 
-	host, port, user, pass := parts[0], parts[1], parts[2], parts[3]
 	return fmt.Sprintf("http://%s:%s@%s:%s", user, pass, host, port), nil
 }
 

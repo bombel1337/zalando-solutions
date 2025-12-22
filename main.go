@@ -22,7 +22,7 @@ const (
 	firstNamesFile = "lastnames.txt"
 	tasksFileName  = "tasks.csv"
 
-	debugIP = "" // http://127.0.0.1:8000
+	debugIP = "http://127.0.0.1:51263" // http://127.0.0.1:8000
 )
 
 func main() {
@@ -58,11 +58,9 @@ func main() {
 		return
 	}
 	for _, task := range *tasks {
-		go zalando.ZalandoInit(&task)
+		zalando.ZalandoInit(task)
 	}
 
-	time.Sleep(9999 * time.Hour)
-
 	utils.LogInfo(0, "main", "Successfully prepared app")
-
+	time.Sleep(9999 * time.Hour)
 }
