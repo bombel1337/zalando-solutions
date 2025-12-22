@@ -93,7 +93,7 @@ func (t *Task) initSurfClientWithDynamicProxy() {
 		Builder().
 		Session().
 		Singleton().
-		HTTP3Settings().Chrome().Set().
+		Impersonate().Chrome().
 		NotFollowRedirects().
 		Proxy(func() g.String {
 			t.proxyMu.RLock()
