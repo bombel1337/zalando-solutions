@@ -1,505 +1,430 @@
 package zalando
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 	"zalando-solutions/akamai"
 	"zalando-solutions/utils"
 
-	tls_client "github.com/bogdanfinn/tls-client"
-
 	"github.com/Hyper-Solutions/hyper-sdk-go/v2"
-	http "github.com/bogdanfinn/fhttp"
+	"github.com/enetx/g"
+	"github.com/enetx/surf"
 )
 
-func (t *task) getPublicIP() (Result, error) {
-	req, err := http.NewRequest(http.MethodGet, "https://api.ipify.org?format=json", nil)
-	if err != nil {
-		return Result{Msg: "build request failed"}, err
-	}
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return Result{Msg: "request failed"}, err
-	}
-	defer resp.Body.Close()
+func (z *zalaTask) getPublicIP() (Result, error) {
 	type ipifyResp struct {
 		IP string `json:"ip"`
 	}
-	if resp.StatusCode == 200 {
+
+	res := z.Client.
+		Get("https://api.ipify.org?format=json").
+		SetHeaders(map[string]string{"Accept": "application/json"}).
+		Do()
+
+	if res.IsErr() {
+		err := res.Err()
+		return Result{Msg: "request failed"}, err
+	}
+
+	resp := res.Ok()
+	defer resp.Body.Close()
+
+	code := int(resp.StatusCode)
+
+	if code == 200 {
 		var out ipifyResp
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			return Result{Msg: "decode failed"}, err
+		if err := resp.Body.JSON(&out); err != nil {
+			return Result{Status: code, Msg: "decode failed"}, err
 		}
-		if out.IP == "" {
-			return Result{Msg: "empty ip in response"}, err
+
+		ip := strings.TrimSpace(out.IP)
+		if ip == "" {
+			return Result{Status: code, Msg: "empty ip in response"}, fmt.Errorf("empty ip in response")
 		}
-		t.Akamai.IPAddress = out.IP
+
+		z.Akamai.IPAddress = ip
 		return Result{
-			Status: resp.StatusCode,
-			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
+			Status: code,
+			Msg:    fmt.Sprintf("Successfully fetched (status=%d)", code),
 		}, nil
 	}
 
 	return Result{
-		Status: resp.StatusCode,
-		Msg:    fmt.Sprintf("GetPublicIP request failed (%s)", resp.Status),
-	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
+		Status: code,
+		Msg:    fmt.Sprintf("GetPublicIP request failed (status=%d)", code),
+	}, HTTPError{Code: code, Msg: fmt.Sprintf("status=%d", code)}
 }
-func (t *task) visitSensorScriptAkamai() (Result, error) {
 
-	req, err := http.NewRequest(http.MethodGet, t.Akamai.Sensor.SensorScriptUrl, nil)
-	if err != nil {
-		return Result{Msg: "build request failed"}, err
-	}
+func (z *zalaTask) visitSensorScriptAkamai() (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "no-cors")
+	headers.Set("sec-fetch-dest", "script")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+	headers.Set("priority", "u=0, i")
 
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"no-cors"},
-		"sec-fetch-dest":     {"script"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		"priority":           {"u=0, i"},
-		http.HeaderOrderKey: {
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"sec-ch-ua-mobile",
-			"accept",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-			"priority",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
+	res := z.Client.
+		Get(g.String(z.Akamai.Sensor.SensorScriptUrl)).
+		SetHeaders(headers).
+		Do()
+
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
 	}
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return Result{Msg: "request failed"}, err
-	}
-	defer resp.Body.Close()
-	bodyText, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Result{Msg: "read body failed"}, err
-	}
+	resp := res.Ok()
+	body := resp.Body.String()
 	if resp.StatusCode == 200 {
-		t.Akamai.Sensor.SensorScriptString = string(bodyText)
+		z.Akamai.Sensor.SensorScriptString = string(body)
 		return Result{
-			Status: resp.StatusCode,
-			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
+			Status: int(resp.StatusCode),
+			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.GetResponse().Status),
 		}, nil
 	}
 
 	return Result{
-		Status: resp.StatusCode,
-		Msg:    fmt.Sprintf("VisitSensorScript request failed (%s)", resp.Status),
-	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("visitSensorScriptAkamai request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
-func (t *task) visitSbsdScriptAkamai() (Result, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s?v=%s", t.Akamai.Sbsd.SbsdScriptUrl, t.Akamai.Sbsd.SbsdV), nil)
-	if err != nil {
-		return Result{Msg: "build request failed"}, err
-	}
 
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"no-cors"},
-		"sec-fetch-dest":     {"script"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		http.HeaderOrderKey: {
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"sec-ch-ua-mobile",
-			"accept",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
+func (z *zalaTask) visitSbsdScriptAkamai() (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "no-cors")
+	headers.Set("sec-fetch-dest", "script")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+
+	res := z.Client.
+		Get(g.String(fmt.Sprintf("%s?v=%s", z.Akamai.Sbsd.SbsdScriptUrl, z.Akamai.Sbsd.SbsdV))).
+		SetHeaders(headers).
+		Do()
+
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
 	}
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return Result{Msg: "request failed"}, err
-	}
-	defer resp.Body.Close()
-	bodyText, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Result{Msg: "read body failed"}, err
-	}
+	resp := res.Ok()
+	body := resp.Body.String()
 	if resp.StatusCode == 200 {
-		t.Akamai.Sbsd.SbsdScriptString = string(bodyText)
+		z.Akamai.Sbsd.SbsdScriptString = string(body)
 		return Result{
-			Status: resp.StatusCode,
-			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
+			Status: int(resp.StatusCode),
+			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.GetResponse().Status),
 		}, nil
 	}
 
 	return Result{
-		Status: resp.StatusCode,
-		Msg:    fmt.Sprintf("VisiSbsdScript request failed (%s)", resp.Status),
-	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("visitSbsdScriptAkamai request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
-func (t *task) visitPixelScriptAkamai() (Result, error) {
-	req, err := http.NewRequest(http.MethodGet, t.Akamai.Pixel.PixelScriptUrl, nil)
-	if err != nil {
-		return Result{Msg: "build request failed"}, err
-	}
 
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"no-cors"},
-		"sec-fetch-dest":     {"script"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		"if-none-match":      {fmt.Sprintf("%x", sha256.Sum256([]byte("etag")))},
-		"if-modified-since":  {`Thu, 22 Feb 2024 19:37:35 GMT`},
-		http.HeaderOrderKey: {
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"sec-ch-ua-mobile",
-			"accept",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-			"if-none-match",
-			"if-modified-since",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
-	}
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return Result{Msg: "request failed"}, err
-	}
-	defer resp.Body.Close()
+func (z *zalaTask) visitPixelScriptAkamai() (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "no-cors")
+	headers.Set("sec-fetch-dest", "script")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+	headers.Set("if-none-match", g.String(fmt.Sprintf("%x", sha256.Sum256([]byte("etag")))))
+	headers.Set("if-modified-since", "Thu, 22 Feb 2024 19:37:35 GMT")
 
+	res := z.Client.
+		Get(g.String(z.Akamai.Pixel.PixelScriptUrl)).
+		SetHeaders(headers).
+		Do()
+
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
+	}
+	resp := res.Ok()
 	if resp.StatusCode == 200 {
-		t.Akamai.Pixel.U, err = akamai.ParsePixelScriptVar(resp.Body)
+		var err error
+		z.Akamai.Pixel.U, err = akamai.ParsePixelScriptVar(resp.Body.Reader)
 		if err != nil {
 			return Result{Msg: "read body failed"}, err
 		}
-
 		return Result{
-			Status: resp.StatusCode,
-			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.Status),
+			Status: int(resp.StatusCode),
+			Msg:    fmt.Sprintf("Successfully fetched (%s)", resp.GetResponse().Status),
 		}, nil
 	}
 
 	return Result{
-		Status: resp.StatusCode,
-		Msg:    fmt.Sprintf("visitPixelScript request failed (%s)", resp.Status),
-	}, HTTPError{Code: resp.StatusCode, Msg: resp.Status}
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("visitPixelScriptAkamai request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
+
 }
-func (t *task) postAkamaiSensor(sensorData *string) error {
-	b, _ := json.Marshal(map[string]string{"sensor_data": *sensorData})
-	body := bytes.NewReader(b)
 
-	req, err := http.NewRequest(http.MethodPost, t.Akamai.Sensor.SensorScriptUrl, body)
+func (z *zalaTask) postAkamaiSensor(sensorData *string) (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("content-length", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("content-type", "text/plain;charset=UTF-8")
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("origin", g.String(z.Akamai.Domain))
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "cors")
+	headers.Set("sec-fetch-dest", "empty")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+	headers.Set("priority", "u=1, i")
+
+	b, err := json.Marshal(map[string]string{
+		"sensor_data": *sensorData,
+	})
 	if err != nil {
-		return err
-	}
-
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"content-type":       {"text/plain;charset=UTF-8"},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"origin":             {t.Akamai.Domain},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"cors"},
-		"sec-fetch-dest":     {"empty"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		"priority":           {"u=1, i"},
-		http.HeaderOrderKey: {
-			"content-length",
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"content-type",
-			"sec-ch-ua-mobile",
-			"accept",
-			"origin",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-			"priority",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
+		return Result{Msg: "marshal failed"}, err
 	}
 
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return err
+	res := z.Client.
+		Post(g.String(z.Akamai.Sensor.SensorScriptUrl), b).
+		SetHeaders(headers).
+		Do()
+
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
 	}
-	defer resp.Body.Close()
-	bodyText, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
+	resp := res.Ok()
+	body := resp.Body.String()
 	if resp.StatusCode == 201 {
-		if strings.Contains(string(bodyText), `{"success": true}`) {
-			return nil
+		if strings.Contains(string(body), `{"success": true}`) {
+			return Result{
+				Status: int(resp.StatusCode),
+				Msg:    fmt.Sprintf("Successfully posted sensor (%s)", resp.GetResponse().Status),
+			}, nil
 		} else {
-			return fmt.Errorf("bad body on post sensor")
+			return Result{Msg: fmt.Sprintf("bad body on sensor: %s", body)}, fmt.Errorf(resp.GetResponse().Status)
 		}
 	}
-
-	return fmt.Errorf("request failed: %s", resp.Status)
+	return Result{
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("postAkamaiSensor request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
 
-func (t *task) postSbsdPayload(payload *string) error {
-	b, _ := json.Marshal(map[string]string{"body": *payload})
-	body := bytes.NewReader(b)
-	req, err := http.NewRequest(http.MethodPost, t.Akamai.Sbsd.SbsdScriptUrl, body)
+func (z *zalaTask) postSbsdPayload(body *string) (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("content-length", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("content-type", "application/json")
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("origin", g.String(z.Akamai.Domain))
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "cors")
+	headers.Set("sec-fetch-dest", "empty")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+	headers.Set("priority", "u=1, i")
+
+	b, err := json.Marshal(map[string]string{
+		"body": *body,
+	})
 	if err != nil {
-		return err
+		return Result{Msg: "marshal failed"}, err
 	}
 
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"content-type":       {"application/json"},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"origin":             {t.Akamai.Domain},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"cors"},
-		"sec-fetch-dest":     {"empty"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		"priority":           {"u=1, i"},
-		http.HeaderOrderKey: {
-			"content-length",
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"content-type",
-			"sec-ch-ua-mobile",
-			"accept",
-			"origin",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-			"priority",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
-	}
+	res := z.Client.
+		Post(g.String(z.Akamai.Sbsd.SbsdScriptUrl), b).
+		SetHeaders(headers).
+		Do()
 
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return err
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
 	}
-	defer resp.Body.Close()
+	resp := res.Ok()
 
 	if resp.StatusCode == 202 || resp.StatusCode == 200 {
-		return nil
+		return Result{
+			Status: int(resp.StatusCode),
+			Msg:    fmt.Sprintf("Successfully posted sensor (%s)", resp.GetResponse().Status),
+		}, nil
 	}
 
-	return fmt.Errorf("request failed: %s", resp.Status)
+	return Result{
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("postSbsdPayload request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
 
-func (t *task) postPixelPayload(payload *string) error {
-	body := strings.NewReader(*payload)
-	url, err := addPixelPrefix(t.Akamai.Pixel.PixelScriptUrl)
+func (z *zalaTask) postPixelPayload(payload *string) (Result, error) {
+	url, err := addPixelPrefix(z.Akamai.Pixel.PixelScriptUrl)
 	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest(http.MethodPost, url, body)
-	if err != nil {
-		return err
+		return Result{Msg: "addPixelPrefix failed"}, err
 	}
 
-	req.Header = http.Header{
-		"sec-ch-ua-platform": {`"Windows"`},
-		"dpr":                {"1"},
-		"viewport-width":     {"1920"},
-		"user-agent":         {utils.UserAgent},
-		"sec-ch-ua":          {utils.SecChUa},
-		"content-type":       {"application/x-www-form-urlencoded"},
-		"sec-ch-ua-mobile":   {"?0"},
-		"accept":             {"*/*"},
-		"origin":             {t.Akamai.Domain},
-		"sec-fetch-site":     {"same-origin"},
-		"sec-fetch-mode":     {"cors"},
-		"sec-fetch-dest":     {"empty"},
-		"referer":            {t.Akamai.Referer},
-		"accept-encoding":    {"gzip, deflate, br, zstd"},
-		"accept-language":    {utils.AcceptLanguage},
-		"priority":           {"u=1, i"},
-		http.HeaderOrderKey: {
-			"content-length",
-			"sec-ch-ua-platform",
-			"dpr",
-			"viewport-width",
-			"user-agent",
-			"sec-ch-ua",
-			"content-type",
-			"sec-ch-ua-mobile",
-			"accept",
-			"origin",
-			"sec-fetch-site",
-			"sec-fetch-mode",
-			"sec-fetch-dest",
-			"referer",
-			"accept-encoding",
-			"accept-language",
-			"cookie",
-			"priority",
-		},
-		http.PHeaderOrderKey: {
-			":method",
-			":authority",
-			":scheme",
-			":path",
-		},
-	}
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("content-length", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("user-agent", utils.UserAgent)
+	headers.Set("sec-ch-ua", utils.SecChUa)
+	headers.Set("content-type", "application/x-www-form-urlencoded")
+	headers.Set("sec-ch-ua-mobile", "?0")
+	headers.Set("accept", "*/*")
+	headers.Set("origin", g.String(z.Akamai.Domain))
+	headers.Set("sec-fetch-site", "same-origin")
+	headers.Set("sec-fetch-mode", "cors")
+	headers.Set("sec-fetch-dest", "empty")
+	headers.Set("referer", g.String(z.Akamai.Referer))
+	headers.Set("accept-encoding", "gzip, deflate, br, zstd")
+	headers.Set("accept-language", utils.AcceptLanguage)
+	headers.Set("cookie", "")
+	headers.Set("priority", "u=1, i")
 
-	resp, err := t.Client.Do(req)
-	if err != nil {
-		return err
+	res := z.Client.
+		Post(g.String(url), *payload).
+		SetHeaders(headers).
+		Do()
+
+	if !res.IsOk() {
+		return Result{Msg: "request failed"}, res.Err()
 	}
-	defer resp.Body.Close()
+	resp := res.Ok()
 
 	if resp.StatusCode == 200 {
-		return nil
+		return Result{
+			Status: int(resp.StatusCode),
+			Msg:    fmt.Sprintf("Successfully posted pixel (%s)", resp.GetResponse().Status),
+		}, nil
 	}
 
-	return fmt.Errorf("request failed: %s", resp.Status)
+	return Result{
+		Status: int(resp.StatusCode),
+		Msg:    fmt.Sprintf("postPixelPayload request failed (%s)", resp.GetResponse().Status),
+	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
+func getCookieValue(client *surf.Client, rawURL string, key string) (string, error) {
+	if client == nil || client.GetClient().Jar == nil {
+		return "", nil
+	}
 
-func getCookieValue(client tls_client.HttpClient, rawUrl string, key string) (string, error) {
-	parsedURL, err := url.Parse(rawUrl)
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "", err
 	}
 
-	for _, cookie := range client.GetCookies(parsedURL) {
-		if cookie.Name == key {
-			return cookie.Value, nil
+	cookies := client.GetClient().Jar.Cookies(u)
+	for _, c := range cookies {
+		if c.Name == key {
+			return c.Value, nil
 		}
 	}
 
-	return "", fmt.Errorf("cookie not found: " + key)
+	return "", nil
 }
-func (t *task) generateValidAkamaiSensor() error {
+
+// func getCookieValue(client tls_client.HttpClient, rawUrl string, key string) (string, error) {
+// 	parsedURL, err := url.Parse(rawUrl)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	for _, cookie := range client.GetCookies(parsedURL) {
+// 		if cookie.Name == key {
+// 			return cookie.Value, nil
+// 		}
+// 	}
+
+//		return "", fmt.Errorf("cookie not found: " + key)
+//	}
+func (z *zalaTask) generateValidAkamaiSensor() error {
 	context := ""
 	sensorData := ""
 	for i := range 3 {
-		_abck, err := getCookieValue(t.Client, t.Akamai.Domain, "_abck")
+
+		_abck, err := getCookieValue(z.Client, z.Akamai.Domain, "_abck")
 		if err != nil {
 			return fmt.Errorf("could not find _abck cookie: %s", err.Error())
 		}
-		bm_sz, err := getCookieValue(t.Client, t.Akamai.Domain, "bm_sz")
+		bm_sz, err := getCookieValue(z.Client, z.Akamai.Domain, "bm_sz")
 		if err != nil {
 			return fmt.Errorf("could not find bm_sz cookie: %s", err.Error())
 		}
+
 		input := hyper.SensorInput{
-			ScriptUrl:      t.Akamai.Sensor.SensorScriptUrl,
-			PageUrl:        fmt.Sprintf("%s", t.Akamai.Sensor.PageUrl),
+			ScriptUrl:      z.Akamai.Sensor.SensorScriptUrl,
+			PageUrl:        fmt.Sprintf("%s", z.Akamai.Sensor.PageUrl),
 			UserAgent:      utils.UserAgent,
 			Abck:           _abck,
 			Bmsz:           bm_sz,
 			Version:        "3",
 			AcceptLanguage: utils.AcceptLanguage,
-			IP:             t.Akamai.IPAddress,
+			IP:             z.Akamai.IPAddress,
 		}
 		if i == 0 {
-			input.Script = t.Akamai.Sensor.SensorScriptString
+			input.Script = z.Akamai.Sensor.SensorScriptString
 		} else {
 			input.Context = context
 		}
@@ -510,25 +435,30 @@ func (t *task) generateValidAkamaiSensor() error {
 		// } else {
 		// 	fmt.Printf("input sensor=%s]n", b)
 		// }
-		sensorData, context, err = akamai.GenerateSensorData(t.Akamai.AkamaiClient, &input)
+		sensorData, context, err = akamai.GenerateSensorData(z.Akamai.AkamaiClient, &input)
 		if err != nil {
 			return fmt.Errorf("error generating sensordata: %s", err.Error())
 		}
+
 		// fmt.Println("sensor ==================")
 		// fmt.Println(sensorData, context)
 		// fmt.Println("sensor ==================")
 
-		err = t.postAkamaiSensor(&sensorData)
+		res, err := z.retryLogic("postAkamaiSensor", func() (Result, error) {
+			res, e := z.postAkamaiSensor(&sensorData)
+			return res, e
+		})
 		if err != nil {
-			return fmt.Errorf("error posting sensordata: %s", err.Error())
+			utils.LogError(z.TaskNumber, "postAkamaiSensor", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+			return err
 		}
 
-		_abck, err = getCookieValue(t.Client, "https://accounts.zalando.com", "_abck")
+		_abck, err = getCookieValue(z.Client, "https://accounts.zalando.com", "_abck")
 		if err != nil {
 			return fmt.Errorf("could not find _abck cookie: %s", err.Error())
 		}
 		if akamai.IsCookieValid(_abck, i) {
-			fmt.Println("abck valid on step", i)
+			utils.LogInfo(z.TaskNumber, "generateValidAkamaiSensor", fmt.Sprintf("abck valid on step=%v status=%d msg=%q", i, res.Status, res.Msg))
 			return nil
 		}
 
@@ -536,9 +466,9 @@ func (t *task) generateValidAkamaiSensor() error {
 	return nil
 }
 
-func (t *task) generateValidAkamaiSbsd() error {
+func (z *zalaTask) generateValidAkamaiSbsd() error {
 	for i := range 2 {
-		bm_so, err := getCookieValue(t.Client, "https://accounts.zalando.com", "bm_so")
+		bm_so, err := getCookieValue(z.Client, "https://accounts.zalando.com", "bm_so")
 		if err != nil {
 			return fmt.Errorf("could not find bm_so cookie: %s", err.Error())
 		}
@@ -546,12 +476,12 @@ func (t *task) generateValidAkamaiSbsd() error {
 		input := hyper.SbsdInput{
 			Index:          i,
 			UserAgent:      utils.UserAgent,
-			Uuid:           t.Akamai.Sbsd.SbsdV,
-			PageUrl:        t.Akamai.Sensor.PageUrl,
+			Uuid:           z.Akamai.Sbsd.SbsdV,
+			PageUrl:        z.Akamai.Sensor.PageUrl,
 			OCookie:        bm_so,
-			Script:         t.Akamai.Sbsd.SbsdScriptString,
+			Script:         z.Akamai.Sbsd.SbsdScriptString,
 			AcceptLanguage: utils.AcceptLanguage,
-			IP:             t.Akamai.IPAddress,
+			IP:             z.Akamai.IPAddress,
 		}
 		// fmt.Println("input sbsd======")
 		// b, err := json.Marshal(input)
@@ -560,7 +490,8 @@ func (t *task) generateValidAkamaiSbsd() error {
 		// } else {
 		// 	fmt.Printf("input sbsd=%s]n", b)
 		// }
-		payload, err := akamai.GenerateSbsdPayload(t.Akamai.AkamaiClient, &input)
+
+		body, err := akamai.GenerateSbsdBody(z.Akamai.AkamaiClient, &input)
 		if err != nil {
 			return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 		}
@@ -569,35 +500,39 @@ func (t *task) generateValidAkamaiSbsd() error {
 		// fmt.Println(payload)
 		// fmt.Println("sbsd ==================")
 
-		err = t.postSbsdPayload(&payload)
+		res, err := z.retryLogic("postSbsdPayload", func() (Result, error) {
+			res, e := z.postSbsdPayload(&body)
+			return res, e
+		})
 		if err != nil {
-			return fmt.Errorf("error posting sbsd payload: %s", err.Error())
+			utils.LogError(z.TaskNumber, "postSbsdPayload", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+			return err
 		}
 	}
 	return nil
 }
 
-func (t *task) generateValidAkamaiPixel() error {
+func (z *zalaTask) generateValidAkamaiPixel() error {
 
 	input := hyper.PixelInput{
 		UserAgent:      utils.UserAgent,
-		HTMLVar:        t.Akamai.Pixel.Bazadebezolkohpepadr,
-		ScriptVar:      t.Akamai.Pixel.U,
+		HTMLVar:        z.Akamai.Pixel.Bazadebezolkohpepadr,
+		ScriptVar:      z.Akamai.Pixel.U,
 		AcceptLanguage: utils.AcceptLanguage,
-		IP:             t.Akamai.IPAddress,
+		IP:             z.Akamai.IPAddress,
 	}
-	payload, err := akamai.GeneratePixel(t.Akamai.AkamaiClient, &input)
+	payload, err := akamai.GeneratePixel(z.Akamai.AkamaiClient, &input)
 	if err != nil {
 		return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 	}
-	fmt.Println("pixel ==================")
 
-	fmt.Println(payload)
-	fmt.Println("pixel ==================")
-
-	err = t.postPixelPayload(&payload)
+	res, err := z.retryLogic("postPixelPayload", func() (Result, error) {
+		res, e := z.postPixelPayload(&payload)
+		return res, e
+	})
 	if err != nil {
-		return fmt.Errorf("error posting pixel payload: %s", err.Error())
+		utils.LogError(z.TaskNumber, "postPixelPayload", fmt.Sprintf("final status=%d msg=%q", res.Status, res.Msg), err)
+		return err
 	}
 
 	return nil

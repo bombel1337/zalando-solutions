@@ -122,7 +122,7 @@ func GeneratePixel(session *hyper.Session, input *hyper.PixelInput) (string, err
 	}
 	return payload, err
 }
-func GenerateSbsdPayload(session *hyper.Session, input *hyper.SbsdInput) (string, error) {
+func GenerateSbsdBody(session *hyper.Session, input *hyper.SbsdInput) (string, error) {
 	payload, err := session.GenerateSbsdData(context.Background(), input)
 	if err != nil {
 		return "", err
