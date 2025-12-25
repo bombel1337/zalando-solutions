@@ -91,7 +91,7 @@ type sbsd struct {
 func (t *Task) initSurfClientWithDynamicProxy() {
 	t.Client = surf.NewClient().Builder().Session().Singleton().
 		JA().
-		Chrome142().NotFollowRedirects().
+		Chrome142().ForceHTTP1().NotFollowRedirects().
 		Proxy(func() g.String {
 			t.proxyMu.RLock()
 			p := t.currentProxy

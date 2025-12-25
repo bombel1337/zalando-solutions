@@ -117,23 +117,42 @@ func (z *zalaTask) login() (Result, error) {
 	headers.Set("cookie", "")
 	headers.Set("priority", "u=1, i")
 
-	client_id, _ := getQuery(z.Akamai.Referer, "client_id")
-	request_id, _ := getQuery(z.Akamai.Referer, "request_id")
-	redirect_uri, _ := getQuery(z.Akamai.Referer, "redirect_uri")
-	ui_locales, _ := getQuery(z.Akamai.Referer, "ui_locales")
+	clientID, _ := getQuery(z.Akamai.Referer, "client_id")
+	requestID, _ := getQuery(z.Akamai.Referer, "request_id")
+	redirectURI, _ := getQuery(z.Akamai.Referer, "redirect_uri")
+	uiLocales, _ := getQuery(z.Akamai.Referer, "ui_locales")
 	tc, _ := getQuery(z.Akamai.Referer, "tc")
 
-	b, err := json.Marshal(map[string]any{
-		"authentication_request": map[string]string{
-			"client_id":    client_id,
-			"request_id":   request_id,
-			"redirect_uri": redirect_uri,
-			"ui_locales":   ui_locales,
-			"tc":           tc,
+	type bodystruct struct {
+		Secret                string `json:"secret"`
+		Email                 string `json:"email"`
+		AuthenticationRequest struct {
+			ClientID    string `json:"client_id"`
+			RequestID   string `json:"request_id"`
+			RedirectURI string `json:"redirect_uri"`
+			UiLocales   string `json:"ui_locales"`
+			Tc          string `json:"tc"`
+		}
+	}
+	body := bodystruct{
+		Secret: z.Data.ZalandoPassword,
+		Email:  z.Data.ZalandoEmail,
+		AuthenticationRequest: struct {
+			ClientID    string `json:"client_id"`
+			RequestID   string `json:"request_id"`
+			RedirectURI string `json:"redirect_uri"`
+			UiLocales   string `json:"ui_locales"`
+			Tc          string `json:"tc"`
+		}{
+			ClientID:    clientID,
+			RequestID:   requestID,
+			RedirectURI: redirectURI,
+			UiLocales:   uiLocales,
+			Tc:          tc,
 		},
-		"email":  z.Data.ZalandoEmail,
-		"secret": z.Data.ZalandoPassword,
-	})
+	}
+
+	b, err := json.Marshal(body)
 	if err != nil {
 		return Result{Msg: "marshal failed"}, err
 	}

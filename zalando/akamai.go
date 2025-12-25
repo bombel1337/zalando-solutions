@@ -481,7 +481,7 @@ func (z *zalaTask) generateValidAkamaiSensor() error {
 }
 
 func (z *zalaTask) generateValidAkamaiSbsd() error {
-	for i := range 2 {
+	for i := range 1 {
 		bm_so, err := getCookieValue(z.Client, "https://accounts.zalando.com", "bm_so")
 		if err != nil {
 			return fmt.Errorf("could not find bm_so cookie: %s", err.Error())
