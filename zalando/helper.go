@@ -1,11 +1,18 @@
 package zalando
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 )
 
 func getClientMutationID() string {
@@ -69,14 +76,22 @@ func buildAuthenticateURLOrdered(rawAuthURL string) (string, error) {
 	return base + path + "?" + strings.Join(parts, "&"), nil
 }
 func buildSSOPostReg(raw string) (string, error) {
-	u, err := url.Parse(raw); if err != nil { return "", err }
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
 	m := map[string]string{}
-	for _, p := range strings.Split(u.RawQuery, "&") { k,v,_ := strings.Cut(p,"="); if _,ok:=m[k]; !ok { m[k]=v } }
+	for _, p := range strings.Split(u.RawQuery, "&") {
+		k, v, _ := strings.Cut(p, "=")
+		if _, ok := m[k]; !ok {
+			m[k] = v
+		}
+	}
 	u.Scheme, u.Host, u.Path, u.Fragment = "https", "accounts.zalando.com", "/sso/authenticate", ""
-	u.RawQuery = "redirect_uri="+m["redirect_uri"]+"&client_id="+m["client_id"]+"&response_type="+m["response_type"]+"&scope="+m["scope"]+
-		"&request_id="+m["request_id"]+"&nonce="+m["nonce"]+"&state="+m["state"]+"&premise="+m["premise"]+"&ui_locales="+m["ui_locales"]+
-		"&zalando_client_id="+m["zalando_client_id"]+"&tc="+m["tc"]+"&sales_channel="+m["sales_channel"]+"&client_country="+m["client_country"]+
-		"&client_category="+m["client_category"]+"&view=register"
+	u.RawQuery = "redirect_uri=" + m["redirect_uri"] + "&client_id=" + m["client_id"] + "&response_type=" + m["response_type"] + "&scope=" + m["scope"] +
+		"&request_id=" + m["request_id"] + "&nonce=" + m["nonce"] + "&state=" + m["state"] + "&premise=" + m["premise"] + "&ui_locales=" + m["ui_locales"] +
+		"&zalando_client_id=" + m["zalando_client_id"] + "&tc=" + m["tc"] + "&sales_channel=" + m["sales_channel"] + "&client_country=" + m["client_country"] +
+		"&client_category=" + m["client_category"] + "&view=register"
 	return u.String(), nil
 }
 func parseRawQuery(raw string) map[string]string {
@@ -125,4 +140,43 @@ func addPixelPrefix(raw string) (string, error) {
 	}
 
 	return u.String(), nil
+}
+
+func decodeBodyByEncoding(contentEncoding string, raw []byte) ([]byte, error) {
+	enc := strings.ToLower(strings.TrimSpace(contentEncoding))
+	if enc == "" || enc == "identity" {
+		return raw, nil
+	}
+
+	rd := bytes.NewReader(raw)
+
+	switch enc {
+	case "gzip":
+		gr, err := gzip.NewReader(rd)
+		if err != nil {
+			return nil, fmt.Errorf("gzip.NewReader: %w", err)
+		}
+		defer gr.Close()
+		return io.ReadAll(gr)
+
+	case "deflate":
+		fr := flate.NewReader(rd)
+		defer fr.Close()
+		return io.ReadAll(fr)
+
+	case "br":
+		br := brotli.NewReader(rd)
+		return io.ReadAll(br)
+
+	case "zstd":
+		zr, err := zstd.NewReader(rd)
+		if err != nil {
+			return nil, fmt.Errorf("zstd.NewReader: %w", err)
+		}
+		defer zr.Close()
+		return io.ReadAll(zr)
+
+	default:
+		return nil, fmt.Errorf("unsupported Content-Encoding: %q", enc)
+	}
 }

@@ -38,33 +38,32 @@ func (z *zalaTask) retryLogic(name string, fn func() (Result, error)) (Result, e
 		lastRes, lastErr = res, err
 
 		if err == nil {
-			// utils.LogInfo(t.TaskNumber, name, fmt.Sprintf(`attempt %d/%d success msg=%q`, i, max, res.Msg))
 			return res, nil
 		}
 
 		he, ok := err.(HTTPError)
 		if !ok {
-			utils.LogError(z.TaskNumber, name, fmt.Sprintf(`attempt %d/%d unexpected msg=%q`, i, max, res.Msg), err)
+			// do NOT log here -> caller logs once
 			return res, err
 		}
 
 		if !retryable(he.Code) {
-			utils.LogError(z.TaskNumber, name,
-				fmt.Sprintf(`non-retryable status=%d msg=%q`, he.Code, res.Msg),
-				err,
-			)
+			// do NOT log here -> caller logs once
 			return res, fmt.Errorf("%s failed (non-retryable): %w", name, err)
-		} else {
-			utils.LogWarning(z.TaskNumber, name,
-				fmt.Sprintf(`attempt %d/%d failed status=%d msg=%q`, i, max, he.Code, res.Msg),
-			)
 		}
+
+		// only retry logging here
+		utils.LogWarning(z.TaskNumber, name,
+			fmt.Sprintf(`attempt %d/%d failed status=%d msg=%q`, i, max, he.Code, res.Msg),
+		)
 
 		if i < max {
 			time.Sleep(z.ErrorDelay)
 		}
 	}
 
+	// only one final log here (optional; otherwise let caller do it)
 	utils.LogError(z.TaskNumber, name, fmt.Sprintf(`exhausted retries last_msg=%q`, lastRes.Msg), lastErr)
 	return lastRes, fmt.Errorf("%s failed after %d retries: %w", name, max, lastErr)
 }
+

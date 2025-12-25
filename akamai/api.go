@@ -1,7 +1,6 @@
 package akamai
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -23,8 +22,6 @@ var (
 	pixelScriptVarExpr         = regexp.MustCompile(`g=_\[(\d+)]`)
 	pixelScriptStringArrayExpr = regexp.MustCompile(`var _=\[(.+)];`)
 	pixelScriptStringsExpr     = regexp.MustCompile(`("[^",]*")`)
-
-
 )
 
 func CreateAkamaiSession(apiKey string) *hyper.Session {
@@ -106,28 +103,6 @@ func ParseScriptPathSbsd(src []byte) (path string, v string, err error) {
 	path = strings.ReplaceAll(string(m[1]), "&amp;", "&")
 	v = string(m[2])
 	return path, v, nil
-}
-
-func GenerateSensorData(session *hyper.Session, input *hyper.SensorInput) (string, string, error) {
-	sensorData, sensorContext, err := session.GenerateSensorData(context.Background(), input)
-	if err != nil {
-		return "", "", err
-	}
-	return sensorData, sensorContext, err
-}
-func GeneratePixel(session *hyper.Session, input *hyper.PixelInput) (string, error) {
-	payload, err := session.GeneratePixelData(context.Background(), input)
-	if err != nil {
-		return "", err
-	}
-	return payload, err
-}
-func GenerateSbsdBody(session *hyper.Session, input *hyper.SbsdInput) (string, error) {
-	payload, err := session.GenerateSbsdData(context.Background(), input)
-	if err != nil {
-		return "", err
-	}
-	return payload, err
 }
 
 func IsCookieValid(cookie string, requestCount int) bool {

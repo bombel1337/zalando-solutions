@@ -22,7 +22,7 @@ const (
 	firstNamesFile = "lastnames.txt"
 	tasksFileName  = "tasks.csv"
 
-	debugIP = "http://127.0.0.1:51263" // http://127.0.0.1:8000
+	debugIP = "http://127.0.0.1:55432" // http://127.0.0.1:8000
 )
 
 func main() {
@@ -40,7 +40,7 @@ func main() {
 		utils.ColorfulLog(utils.ColorRed, fmt.Sprintf("Failed to get akamai key"))
 		return
 	}
-	utils.LogInfo(0, "main", "Starting application")
+	utils.LogInfo(-1, "main", "Starting application")
 
 	tasks, err := utils.ClientInit(utils.ClientConfig{
 		TasksFile:      tasksFileName,
@@ -54,13 +54,14 @@ func main() {
 		AkamaiApiKey:   akamaiApiKey,
 	})
 	if err != nil {
-		utils.LogError(0, "main", "Failed to create client", err)
+		utils.LogError(-1, "main", "Failed to create client", err)
 		return
 	}
 	for _, task := range *tasks {
+		// fmt.Println(task.TaskNumber, task.Data.ZalandoEmail)
 		zalando.ZalandoInit(task)
 	}
 
-	utils.LogInfo(0, "main", "Successfully prepared app")
+	utils.LogInfo(-1, "main", "Successfully prepared app")
 	time.Sleep(9999 * time.Hour)
 }

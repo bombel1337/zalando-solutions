@@ -120,16 +120,15 @@ func (l *Logger) log(level LogLevel, c *color.Color, taskNumber int, name, messa
 		entry.Error = &ErrorInfo{Message: err.Error()}
 	}
 
-	taskPart := "-"
-	if taskNumber >= 0 {
-		taskPart = fmt.Sprintf("%d", taskNumber)
-	}
+
 	namePart := name
 	if namePart == "" {
 		namePart = "-"
 	}
-
-	consoleMsg := fmt.Sprintf("%s [%s] [%s] %s", level, taskPart, namePart, message)
+	consoleMsg := fmt.Sprintf("%s [%d] [%s] %s", level, taskNumber, namePart, message)
+	if taskNumber == - 1 {
+		consoleMsg = fmt.Sprintf("%s [%s] %s", level, namePart, message)
+	}
 	if err != nil {
 		consoleMsg += fmt.Sprintf(" | err=%v", err)
 	}

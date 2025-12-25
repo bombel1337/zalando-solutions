@@ -89,12 +89,9 @@ type sbsd struct {
 }
 
 func (t *Task) initSurfClientWithDynamicProxy() {
-	t.Client = surf.NewClient().
-		Builder().
-		Session().
-		Singleton().
-		Impersonate().Chrome().
-		NotFollowRedirects().
+	t.Client = surf.NewClient().Builder().Session().Singleton().
+		JA().
+		Chrome142().NotFollowRedirects().
 		Proxy(func() g.String {
 			t.proxyMu.RLock()
 			p := t.currentProxy
@@ -102,6 +99,19 @@ func (t *Task) initSurfClientWithDynamicProxy() {
 			return g.String(p)
 		}).
 		Build()
+
+	// Builder().
+	// Session().
+	// Singleton().
+	// Impersonate().Chrome().
+	// NotFollowRedirects().
+	// Proxy(func() g.String {
+	// 	t.proxyMu.RLock()
+	// 	p := t.currentProxy
+	// 	t.proxyMu.RUnlock()
+	// 	return g.String(p)
+	// }).
+	// Build()
 }
 
 func ClientInit(cfg ClientConfig) (*[]*Task, error) {
@@ -119,19 +129,19 @@ func ClientInit(cfg ClientConfig) (*[]*Task, error) {
 
 	proxyList, err := loadProxies(cfg.ProxyFile)
 	if err != nil {
-		LogError(0, "ClientInit", "Failed to load proxies", err)
+		LogError(-1, "ClientInit", "Failed to load proxies", err)
 		return nil, err
 	}
 
 	lastnames, err := loadProxies(cfg.LastNamesFile)
 	if err != nil {
-		LogError(0, "ClientInit", "Failed to load proxies", err)
+		LogError(-1, "ClientInit", "Failed to load proxies", err)
 		return nil, err
 	}
 
 	firstnames, err := loadProxies(cfg.FirstNamesFile)
 	if err != nil {
-		LogError(0, "ClientInit", "Failed to load proxies", err)
+		LogError(-1, "ClientInit", "Failed to load proxies", err)
 		return nil, err
 	}
 

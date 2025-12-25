@@ -210,6 +210,6 @@ func (z *zalaTask) register() (Result, error) {
 
 	return Result{
 		Status: int(resp.StatusCode),
-		Msg:    fmt.Sprintf("usernameLookup request failed (%s)", resp.GetResponse().Status),
+		Msg:    fmt.Sprintf("register request failed (%s)", resp.GetResponse().Status),
 	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }

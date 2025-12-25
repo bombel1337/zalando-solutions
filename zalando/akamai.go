@@ -1,6 +1,7 @@
 package zalando
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -15,13 +16,23 @@ import (
 )
 
 func (z *zalaTask) getPublicIP() (Result, error) {
+	headers := g.NewMapOrd[g.String, g.String]()
+	headers.Set(":method", "")
+	headers.Set(":authority", "")
+	headers.Set(":scheme", "")
+	headers.Set(":path", "")
+	headers.Set("sec-ch-ua-platform", `"Windows"`)
+	headers.Set("dpr", "1")
+	headers.Set("viewport-width", "1920")
+	headers.Set("accept", "application/json")
+
 	type ipifyResp struct {
 		IP string `json:"ip"`
 	}
 
 	res := z.Client.
 		Get("https://api.ipify.org?format=json").
-		SetHeaders(map[string]string{"Accept": "application/json"}).
+		SetHeaders(headers).
 		Do()
 
 	if res.IsErr() {
@@ -89,7 +100,8 @@ func (z *zalaTask) visitSensorScriptAkamai() (Result, error) {
 		return Result{Msg: "request failed"}, res.Err()
 	}
 	resp := res.Ok()
-	body := resp.Body.String()
+	body := resp.Body.Bytes()
+
 	if resp.StatusCode == 200 {
 		z.Akamai.Sensor.SensorScriptString = string(body)
 		return Result{
@@ -241,15 +253,23 @@ func (z *zalaTask) postAkamaiSensor(sensorData *string) (Result, error) {
 		return Result{Msg: "request failed"}, res.Err()
 	}
 	resp := res.Ok()
-	body := resp.Body.String()
 	if resp.StatusCode == 201 {
-		if strings.Contains(string(body), `{"success": true}`) {
+		if z.DebugIP != "" {
+			return Result{
+				Status: int(resp.StatusCode),
+				Msg:    fmt.Sprintf("Successfully posted sensor (%s)", resp.GetResponse().Status),
+			}, nil
+		}
+
+		bodyString := resp.Body.Bytes()
+		if strings.Contains(string(bodyString), `{"success": true}`) {
 			return Result{
 				Status: int(resp.StatusCode),
 				Msg:    fmt.Sprintf("Successfully posted sensor (%s)", resp.GetResponse().Status),
 			}, nil
 		} else {
-			return Result{Msg: fmt.Sprintf("bad body on sensor: %s", body)}, fmt.Errorf(resp.GetResponse().Status)
+
+			return Result{Msg: fmt.Sprintf("bad body on sensor: %s", bodyString)}, fmt.Errorf(resp.GetResponse().Status)
 		}
 	}
 	return Result{
@@ -313,7 +333,7 @@ func (z *zalaTask) postSbsdPayload(body *string) (Result, error) {
 	}, HTTPError{Code: int(resp.StatusCode), Msg: resp.GetResponse().Status}
 }
 
-func (z *zalaTask) postPixelPayload(payload *string) (Result, error) {
+func (z *zalaTask) postPixelPayload(body *string) (Result, error) {
 	url, err := addPixelPrefix(z.Akamai.Pixel.PixelScriptUrl)
 	if err != nil {
 		return Result{Msg: "addPixelPrefix failed"}, err
@@ -344,7 +364,7 @@ func (z *zalaTask) postPixelPayload(payload *string) (Result, error) {
 	headers.Set("priority", "u=1, i")
 
 	res := z.Client.
-		Post(g.String(url), *payload).
+		Post(g.String(url), *body).
 		SetHeaders(headers).
 		Do()
 
@@ -400,7 +420,7 @@ func getCookieValue(client *surf.Client, rawURL string, key string) (string, err
 //		return "", fmt.Errorf("cookie not found: " + key)
 //	}
 func (z *zalaTask) generateValidAkamaiSensor() error {
-	context := ""
+	sensorContext := ""
 	sensorData := ""
 	for i := range 3 {
 
@@ -423,26 +443,20 @@ func (z *zalaTask) generateValidAkamaiSensor() error {
 			AcceptLanguage: utils.AcceptLanguage,
 			IP:             z.Akamai.IPAddress,
 		}
+
 		if i == 0 {
 			input.Script = z.Akamai.Sensor.SensorScriptString
 		} else {
-			input.Context = context
-		}
-		// fmt.Println("input sensor======")
-		// b, err := json.Marshal(input)
-		// if err != nil {
-		// 	return fmt.Errorf("error generating sbsd payload: %s", err.Error())
-		// } else {
-		// 	fmt.Printf("input sensor=%s]n", b)
-		// }
-		sensorData, context, err = akamai.GenerateSensorData(z.Akamai.AkamaiClient, &input)
-		if err != nil {
-			return fmt.Errorf("error generating sensordata: %s", err.Error())
+			input.Context = sensorContext
 		}
 
-		// fmt.Println("sensor ==================")
-		// fmt.Println(sensorData, context)
-		// fmt.Println("sensor ==================")
+
+		sensorData, sensorContext, err = z.Akamai.AkamaiClient.GenerateSensorData(context.Background(), &input)
+		if err != nil {
+			println("error after GenerateSensorData")
+			return fmt.Errorf("could not create sensor_data: %s", err.Error())
+		}
+
 
 		res, err := z.retryLogic("postAkamaiSensor", func() (Result, error) {
 			res, e := z.postAkamaiSensor(&sensorData)
@@ -483,25 +497,14 @@ func (z *zalaTask) generateValidAkamaiSbsd() error {
 			AcceptLanguage: utils.AcceptLanguage,
 			IP:             z.Akamai.IPAddress,
 		}
-		// fmt.Println("input sbsd======")
-		// b, err := json.Marshal(input)
-		// if err != nil {
-		// 	return fmt.Errorf("error generating sbsd payload: %s", err.Error())
-		// } else {
-		// 	fmt.Printf("input sbsd=%s]n", b)
-		// }
 
-		body, err := akamai.GenerateSbsdBody(z.Akamai.AkamaiClient, &input)
+		sbsdData, err := z.Akamai.AkamaiClient.GenerateSbsdData(context.Background(), &input)
 		if err != nil {
 			return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 		}
-		// fmt.Println("sbsd ==================")
-
-		// fmt.Println(payload)
-		// fmt.Println("sbsd ==================")
 
 		res, err := z.retryLogic("postSbsdPayload", func() (Result, error) {
-			res, e := z.postSbsdPayload(&body)
+			res, e := z.postSbsdPayload(&sbsdData)
 			return res, e
 		})
 		if err != nil {
@@ -521,13 +524,15 @@ func (z *zalaTask) generateValidAkamaiPixel() error {
 		AcceptLanguage: utils.AcceptLanguage,
 		IP:             z.Akamai.IPAddress,
 	}
-	payload, err := akamai.GeneratePixel(z.Akamai.AkamaiClient, &input)
+
+	body, err := z.Akamai.AkamaiClient.GeneratePixelData(context.Background(), &input)
 	if err != nil {
 		return fmt.Errorf("error generating sbsd payload: %s", err.Error())
 	}
 
+
 	res, err := z.retryLogic("postPixelPayload", func() (Result, error) {
-		res, e := z.postPixelPayload(&payload)
+		res, e := z.postPixelPayload(&body)
 		return res, e
 	})
 	if err != nil {
